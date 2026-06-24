@@ -7,7 +7,10 @@
     "icon": "./assets/icon.png",
     "android": {
       "package": "com.leadnotifier.app",
-      "permissions": ["NOTIFICATIONS", "RECEIVE_BOOT_COMPLETED"]
+      "permissions": [
+        "NOTIFICATIONS",
+        "RECEIVE_BOOT_COMPLETED"
+      ]
     },
     "plugins": [
       [
@@ -17,6 +20,11 @@
           "color": "#ffffff"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "5635e641-abc0-4da2-a750-40eee3c48a30"
+      }
+    }
   }
 }
