@@ -15,6 +15,11 @@
         "buildType": "apk"
       }
     },
+    "standalone": {
+      "android": {
+        "buildType": "apk"
+      }
+    },
     "production": {
       "android": {
         "buildType": "app-bundle"

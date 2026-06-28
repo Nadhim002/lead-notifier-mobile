@@ -21,16 +21,16 @@ export function SettingsScreen({ navigation }: Props) {
       <Text style={styles.section}>Notification Style</Text>
 
       <OptionRow
-        label="Full-screen Alert"
-        description="Takes over the screen like an incoming call"
-        selected={style === 'fullscreen'}
-        onPress={() => setStyle('fullscreen')}
-      />
-      <OptionRow
-        label="Heads-up Notification"
-        description="Banner at the top of the screen"
+        label="Banner Notification"
+        description="Vibration + sound alert at the top of the screen"
         selected={style === 'headsup'}
         onPress={() => setStyle('headsup')}
+      />
+      <OptionRow
+        label="Phone Call Alert"
+        description="Takes over the screen like an incoming call"
+        selected={style === 'phonecall'}
+        onPress={() => setStyle('phonecall')}
       />
 
       <Text style={styles.section}>Account</Text>

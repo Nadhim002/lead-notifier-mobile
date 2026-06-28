@@ -20,10 +20,14 @@ export function useDeviceRegistration(uid: string | null, fcmToken: string | nul
     if (!uid || !fcmToken) return;
 
     let cancelled = false;
-    getOrCreateDeviceId().then((deviceId) => {
+    Promise.all([
+      getOrCreateDeviceId(),
+      AsyncStorage.getItem('notificationStyle'),
+    ]).then(([deviceId, storedStyle]) => {
       if (cancelled) return;
+      const notificationStyle = storedStyle === 'phonecall' ? 'phonecall' : 'headsup';
       const deviceRef = ref(db, `devices/${uid}/${deviceId}`);
-      set(deviceRef, { fcmToken, lastSeen: Date.now() }).catch((e) =>
+      set(deviceRef, { fcmToken, notificationStyle, lastSeen: Date.now() }).catch((e) =>
         console.error('[DeviceReg] Failed to register device:', e)
       );
     });

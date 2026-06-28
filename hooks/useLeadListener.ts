@@ -36,7 +36,7 @@ export function useLeadListener(uid: string | null): void {
         timestamp: data.timestamp,
       };
 
-      if (notificationStyle === 'fullscreen') {
+      if (notificationStyle === 'phonecall') {
         navigateToIncomingLead(lead);
       } else {
         fireLeadNotification(lead);

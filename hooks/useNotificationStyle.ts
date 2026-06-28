@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export type NotificationStyle = 'fullscreen' | 'headsup';
+export type NotificationStyle = 'headsup' | 'phonecall';
 
 const STORAGE_KEY = 'notificationStyle';
-const DEFAULT: NotificationStyle = 'fullscreen';
+const DEFAULT: NotificationStyle = 'headsup';
 
 export function useNotificationStyle(): [NotificationStyle, (s: NotificationStyle) => void] {
   const [style, setStyleState] = useState<NotificationStyle>(DEFAULT);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((val) => {
-      if (val === 'fullscreen' || val === 'headsup') setStyleState(val);
+      if (val === 'headsup' || val === 'phonecall') setStyleState(val);
     });
   }, []);
 

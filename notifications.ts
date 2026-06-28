@@ -30,10 +30,11 @@ export async function setupNotifications(): Promise<string | null> {
   }
 
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('lead-alerts', {
+    await Notifications.setNotificationChannelAsync('lead-alerts-v2', {
       name: 'Lead Alerts',
       importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 1000, 500, 1000, 500, 1000],
+      sound: 'default',
+      vibrationPattern: [0, 600, 300, 600, 300, 600, 300, 600, 300, 600, 300, 600, 300, 600, 300, 600],
       enableVibrate: true,
       enableLights: true,
       lightColor: '#FF0000',
@@ -41,7 +42,19 @@ export async function setupNotifications(): Promise<string | null> {
       bypassDnd: true,
       showBadge: true,
     });
-    NotifLog.log('Android channel created: lead-alerts');
+    await Notifications.setNotificationChannelAsync('lead-alerts-phonecall', {
+      name: 'Lead Alerts — Phone Call',
+      importance: Notifications.AndroidImportance.MAX,
+      sound: 'default',
+      vibrationPattern: [0, 800, 400, 800, 400, 800, 400, 800, 400, 800, 400, 800],
+      enableVibrate: true,
+      enableLights: true,
+      lightColor: '#FF0000',
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      bypassDnd: true,
+      showBadge: true,
+    });
+    NotifLog.log('Android channels created: lead-alerts-v2, lead-alerts-phonecall');
   }
 
   try {
