@@ -1,64 +1,81 @@
 import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ref, onValue } from 'firebase/database';
-import { db } from './firebase';
-import { useFirebaseAuth } from './hooks/useFirebaseAuth';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import * as Notifications from 'expo-notifications';
+import { useGoogleAuth } from './hooks/useGoogleAuth';
+import { useDeviceRegistration } from './hooks/useDeviceRegistration';
 import { setupNotifications } from './notifications';
-import { PairingScreen } from './screens/PairingScreen';
+import { SignInScreen } from './screens/SignInScreen';
 import { HomeScreen } from './screens/HomeScreen';
+import { IncomingLeadScreen } from './screens/IncomingLeadScreen';
+import { SettingsScreen } from './screens/SettingsScreen';
+import { navigationRef, navigateToIncomingLead, RootStackParamList } from './navigation';
+import { LeadPayload } from './types/lead';
+import { AppLog } from './logger';
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
-  const { uid, loading } = useFirebaseAuth();
-  const [isPaired, setIsPaired] = useState<boolean | null>(null);
+  const { uid, loading } = useGoogleAuth();
+  const [fcmToken, setFcmToken] = useState<string | null>(null);
+
+  useDeviceRegistration(uid, fcmToken);
 
   useEffect(() => {
-    setupNotifications();
+    AppLog.log('App mounted');
+    setupNotifications().then((token) => {
+      if (token) {
+        AppLog.log('FCM token ready');
+        setFcmToken(token);
+      }
+    });
   }, []);
 
+  // Handle notification taps when app is killed or backgrounded
   useEffect(() => {
-    if (!uid) return;
-
-    let unsubFirebase: (() => void) | undefined;
-
-    AsyncStorage.getItem('isPaired').then(val => {
-      if (val === 'true') {
-        setIsPaired(true);
-        return;
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as unknown as LeadPayload;
+      if (data?.title) {
+        navigateToIncomingLead(data);
       }
-      const pairedRef = ref(db, `leads/${uid}/paired`);
-      unsubFirebase = onValue(pairedRef, (snap) => {
-        if (snap.exists()) {
-          setIsPaired(true);
-          AsyncStorage.setItem('isPaired', 'true');
-        } else {
-          setIsPaired(false);
-        }
-      });
     });
+    return () => sub.remove();
+  }, []);
 
-    return () => {
-      if (unsubFirebase) unsubFirebase();
-    };
-  }, [uid]);
-
-  if (loading || isPaired === null) {
+  if (loading) {
     return (
       <View style={styles.center}>
-        <Text>Loading...</Text>
+        <Text>Loading…</Text>
       </View>
     );
   }
 
-  if (!uid) {
-    return (
-      <View style={styles.center}>
-        <Text>Firebase connection error. Check your config.</Text>
-      </View>
-    );
-  }
-
-  return isPaired ? <HomeScreen uid={uid} /> : <PairingScreen uid={uid} />;
+  return (
+    <NavigationContainer ref={navigationRef}>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {uid ? (
+          <>
+            <Stack.Screen name="Home">
+              {(props) => <HomeScreen {...props} uid={uid} />}
+            </Stack.Screen>
+            <Stack.Screen
+              name="IncomingLead"
+              component={IncomingLeadScreen}
+              options={{ presentation: 'fullScreenModal', animation: 'fade' }}
+            />
+            <Stack.Screen
+              name="Settings"
+              component={SettingsScreen}
+              options={{ headerShown: true, title: 'Settings', headerBackTitle: 'Back' }}
+            />
+          </>
+        ) : (
+          <Stack.Screen name="Home" component={SignInScreen as any} />
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
 }
 
 const styles = StyleSheet.create({

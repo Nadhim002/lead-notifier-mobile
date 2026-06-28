@@ -9,8 +9,12 @@
       "package": "com.leadnotifier.app",
       "permissions": [
         "NOTIFICATIONS",
-        "RECEIVE_BOOT_COMPLETED"
-      ]
+        "RECEIVE_BOOT_COMPLETED",
+        "USE_FULL_SCREEN_INTENT",
+        "VIBRATE",
+        "USE_NOTIFICATION_POLICY"
+      ],
+      "googleServicesFile": "./google-services.json"
     },
     "plugins": [
       [
@@ -19,7 +23,8 @@
           "icon": "./assets/icon.png",
           "color": "#ffffff"
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "extra": {
       "eas": {
