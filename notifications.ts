@@ -30,11 +30,11 @@ export async function setupNotifications(): Promise<string | null> {
   }
 
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('lead-alerts-v2', {
+    // Standard heads-up notification — vibration matches ~2s default notification sound
+    await Notifications.setNotificationChannelAsync('lead-alerts-v3', {
       name: 'Lead Alerts',
       importance: Notifications.AndroidImportance.MAX,
-      sound: 'default',
-      vibrationPattern: [0, 600, 300, 600, 300, 600, 300, 600, 300, 600, 300, 600, 300, 600, 300, 600],
+      vibrationPattern: [0, 2000],
       enableVibrate: true,
       enableLights: true,
       lightColor: '#FF0000',
@@ -42,11 +42,11 @@ export async function setupNotifications(): Promise<string | null> {
       bypassDnd: true,
       showBadge: true,
     });
-    await Notifications.setNotificationChannelAsync('lead-alerts-phonecall', {
+    // Phonecall-style — repeating ring pattern (1s on / 1s off × 3) to mimic incoming call
+    await Notifications.setNotificationChannelAsync('lead-alerts-phonecall-v2', {
       name: 'Lead Alerts — Phone Call',
       importance: Notifications.AndroidImportance.MAX,
-      sound: 'default',
-      vibrationPattern: [0, 800, 400, 800, 400, 800, 400, 800, 400, 800, 400, 800],
+      vibrationPattern: [0, 1000, 1000, 1000, 1000, 1000, 1000],
       enableVibrate: true,
       enableLights: true,
       lightColor: '#FF0000',
@@ -54,7 +54,7 @@ export async function setupNotifications(): Promise<string | null> {
       bypassDnd: true,
       showBadge: true,
     });
-    NotifLog.log('Android channels created: lead-alerts-v2, lead-alerts-phonecall');
+    NotifLog.log('Android channels created: lead-alerts-v3, lead-alerts-phonecall-v2');
   }
 
   try {
@@ -83,6 +83,26 @@ export async function fireLeadNotification(payload: LeadPayload): Promise<void> 
       priority: Notifications.AndroidNotificationPriority.MAX,
       data: payload as unknown as Record<string, unknown>,
     },
-    trigger: null,
+    trigger: { channelId: 'lead-alerts-v3' },
+  });
+}
+
+// Used when app is backgrounded in phonecall mode — posts a heads-up notification
+// so the user sees it even when app is not visible
+export async function firePhonecallNotification(payload: LeadPayload): Promise<void> {
+  const title = payload.title ?? 'New Lead Purchased';
+  const parts = [payload.buyerName, payload.city, payload.state].filter(Boolean);
+  const body = parts.length > 0 ? parts.join(' — ') : 'New lead purchased!';
+
+  NotifLog.log('Firing phonecall notification:', title);
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title,
+      body,
+      sound: true,
+      priority: Notifications.AndroidNotificationPriority.MAX,
+      data: payload as unknown as Record<string, unknown>,
+    },
+    trigger: { channelId: 'lead-alerts-phonecall-v2' },
   });
 }

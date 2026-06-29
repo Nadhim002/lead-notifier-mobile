@@ -8,8 +8,8 @@ import { RootStackParamList } from '../navigation';
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 export function SettingsScreen({ navigation }: Props) {
-  const [style, setStyle] = useNotificationStyle();
-  const { email, signOut } = useGoogleAuth();
+  const { uid, email, signOut } = useGoogleAuth();
+  const [style, setStyle] = useNotificationStyle(uid);
 
   const handleSignOut = async () => {
     await signOut();

@@ -6,6 +6,7 @@ import * as Notifications from 'expo-notifications';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
 import { useDeviceRegistration } from './hooks/useDeviceRegistration';
 import { setupNotifications } from './notifications';
+import { PhonecallNotification } from './modules/PhonecallNotification';
 import { SignInScreen } from './screens/SignInScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { IncomingLeadScreen } from './screens/IncomingLeadScreen';
@@ -19,6 +20,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export default function App() {
   const { uid, loading } = useGoogleAuth();
   const [fcmToken, setFcmToken] = useState<string | null>(null);
+  const [navReady, setNavReady] = useState(false);
 
   useDeviceRegistration(uid, fcmToken);
 
@@ -32,7 +34,7 @@ export default function App() {
     });
   }, []);
 
-  // Handle notification taps when app is killed or backgrounded
+  // Handle notification taps when app is backgrounded
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as unknown as LeadPayload;
@@ -43,6 +45,27 @@ export default function App() {
     return () => sub.remove();
   }, []);
 
+  // Handle cold-start: app launched by tapping a notification while killed
+  useEffect(() => {
+    if (!navReady) return;
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (!response) return;
+      const data = response.notification.request.content.data as unknown as LeadPayload;
+      if (data?.title) navigateToIncomingLead(data);
+    });
+    // Handle cold-start via fullscreen-intent (phonecall mode, killed state)
+    // The intent carries lead data set by LeadNotificationService on the native side.
+    PhonecallNotification.getInitialLeadData().then((leadJson) => {
+      if (!leadJson) return;
+      try {
+        const lead = JSON.parse(leadJson) as LeadPayload;
+        if (lead?.title) navigateToIncomingLead(lead);
+      } catch {
+        AppLog.warn('Failed to parse phonecall lead data from intent');
+      }
+    });
+  }, [navReady]);
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -52,7 +75,7 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer ref={navigationRef} onReady={() => setNavReady(true)}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {uid ? (
           <>
