@@ -2,6 +2,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { NotifLog } from './logger';
 import { LeadPayload } from './types/lead';
+import { CHANNEL_BANNER, CHANNEL_CALL } from './channels';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -31,7 +32,7 @@ export async function setupNotifications(): Promise<string | null> {
 
   if (Platform.OS === 'android') {
     // Standard heads-up notification — vibration matches ~2s default notification sound
-    await Notifications.setNotificationChannelAsync('lead-alerts-v3', {
+    await Notifications.setNotificationChannelAsync(CHANNEL_BANNER, {
       name: 'Lead Alerts',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 2000],
@@ -43,7 +44,7 @@ export async function setupNotifications(): Promise<string | null> {
       showBadge: true,
     });
     // Phonecall-style — repeating ring pattern (1s on / 1s off × 3) to mimic incoming call
-    await Notifications.setNotificationChannelAsync('lead-alerts-phonecall-v2', {
+    await Notifications.setNotificationChannelAsync(CHANNEL_CALL, {
       name: 'Lead Alerts — Phone Call',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 1000, 1000, 1000, 1000, 1000, 1000],
@@ -54,7 +55,7 @@ export async function setupNotifications(): Promise<string | null> {
       bypassDnd: true,
       showBadge: true,
     });
-    NotifLog.log('Android channels created: lead-alerts-v3, lead-alerts-phonecall-v2');
+    NotifLog.log(`Android channels created: ${CHANNEL_BANNER}, ${CHANNEL_CALL}`);
   }
 
   try {
@@ -83,7 +84,7 @@ export async function fireLeadNotification(payload: LeadPayload): Promise<void> 
       priority: Notifications.AndroidNotificationPriority.MAX,
       data: payload as unknown as Record<string, unknown>,
     },
-    trigger: { channelId: 'lead-alerts-v3' },
+    trigger: { channelId: CHANNEL_BANNER },
   });
 }
 
@@ -103,6 +104,6 @@ export async function firePhonecallNotification(payload: LeadPayload): Promise<v
       priority: Notifications.AndroidNotificationPriority.MAX,
       data: payload as unknown as Record<string, unknown>,
     },
-    trigger: { channelId: 'lead-alerts-phonecall-v2' },
+    trigger: { channelId: CHANNEL_CALL },
   });
 }

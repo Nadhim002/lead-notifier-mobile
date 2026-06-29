@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, AppState } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as Notifications from 'expo-notifications';
@@ -64,6 +64,25 @@ export default function App() {
         AppLog.warn('Failed to parse phonecall lead data from intent');
       }
     });
+  }, [navReady]);
+
+  // Warm tap: app already running and the user taps the phonecall heads-up.
+  // MainActivity.onNewIntent refreshes the intent; re-read it when we foreground.
+  useEffect(() => {
+    if (!navReady) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      PhonecallNotification.getInitialLeadData().then((leadJson) => {
+        if (!leadJson) return;
+        try {
+          const lead = JSON.parse(leadJson) as LeadPayload;
+          if (lead?.title) navigateToIncomingLead(lead);
+        } catch {
+          AppLog.warn('Failed to parse phonecall lead data from intent');
+        }
+      });
+    });
+    return () => sub.remove();
   }, [navReady]);
 
   if (loading) {

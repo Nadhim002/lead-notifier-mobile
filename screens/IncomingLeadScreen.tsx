@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,21 +7,43 @@ import {
   Linking,
   StatusBar,
   ScrollView,
+  Vibration,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { PhonecallNotification } from '../modules/PhonecallNotification';
 import { RootStackParamList } from '../navigation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'IncomingLead'>;
 
+// Repeating ring-style vibration (1s on / 1s off), looped until stopped.
+const RING_VIBRATION = [0, 1000, 1000];
+
 export function IncomingLeadScreen({ route, navigation }: Props) {
   const { lead } = route.params;
 
+  // Ring + vibrate like an incoming call while this screen is shown.
+  useEffect(() => {
+    PhonecallNotification.startRinging();
+    Vibration.vibrate(RING_VIBRATION, true);
+    return () => {
+      PhonecallNotification.stopRinging();
+      Vibration.cancel();
+    };
+  }, []);
+
+  const stopAlert = () => {
+    PhonecallNotification.stopRinging();
+    Vibration.cancel();
+  };
+
   const handleCall = () => {
+    stopAlert();
     if (!lead.buyerMobile) return;
     Linking.openURL(`tel:${lead.buyerMobile}`);
   };
 
   const handleDismiss = () => {
+    stopAlert();
     navigation.goBack();
   };
 

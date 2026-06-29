@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Switch } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useNotificationStyle, NotificationStyle } from '../hooks/useNotificationStyle';
 import { useGoogleAuth } from '../hooks/useGoogleAuth';
+import { PhonecallNotification } from '../modules/PhonecallNotification';
 import { RootStackParamList } from '../navigation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
@@ -10,6 +11,12 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 export function SettingsScreen({ navigation }: Props) {
   const { uid, email, signOut } = useGoogleAuth();
   const [style, setStyle] = useNotificationStyle(uid);
+
+  const selectPhonecall = () => {
+    setStyle('phonecall');
+    // Android 14+ requires explicit user grant for full-screen intents.
+    PhonecallNotification.ensureFullScreenIntentPermission();
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -30,7 +37,7 @@ export function SettingsScreen({ navigation }: Props) {
         label="Phone Call Alert"
         description="Takes over the screen like an incoming call"
         selected={style === 'phonecall'}
-        onPress={() => setStyle('phonecall')}
+        onPress={selectPhonecall}
       />
 
       <Text style={styles.section}>Account</Text>

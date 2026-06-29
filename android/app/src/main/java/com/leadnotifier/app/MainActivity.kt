@@ -1,6 +1,7 @@
 package com.leadnotifier.app
 
 import android.os.Build
+import android.content.Intent
 import android.os.Bundle
 
 import com.facebook.react.ReactActivity
@@ -17,6 +18,11 @@ class MainActivity : ReactActivity() {
     // This is required for expo-splash-screen.
     setTheme(R.style.AppTheme);
     super.onCreate(null)
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent) // so getInitialLeadData() sees the tapped notification
   }
 
   /**

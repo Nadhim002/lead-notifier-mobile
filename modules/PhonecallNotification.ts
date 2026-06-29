@@ -25,4 +25,29 @@ export const PhonecallNotification = {
     }
     return Promise.resolve(null);
   },
+
+  /** Starts the looping ringtone (call-style). No-op off Android. */
+  startRinging(): void {
+    if (Platform.OS === 'android' && Native) Native.startRinging();
+  },
+
+  /** Stops the looping ringtone. No-op off Android. */
+  stopRinging(): void {
+    if (Platform.OS === 'android' && Native) Native.stopRinging();
+  },
+
+  /**
+   * Ensures the app may launch full-screen intents. On Android 14+ this
+   * permission is revoked by default for non-dialer apps; if missing, this
+   * sends the user to the system settings page to grant it. No-op elsewhere.
+   * Call this when the user opts into phonecall-style alerts.
+   */
+  ensureFullScreenIntentPermission(): Promise<void> {
+    if (Platform.OS === 'android' && Native) {
+      return Native.canUseFullScreenIntent().then((ok: boolean) => {
+        if (!ok) Native.openFullScreenIntentSettings();
+      });
+    }
+    return Promise.resolve();
+  },
 };
