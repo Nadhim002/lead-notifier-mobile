@@ -9,3 +9,4 @@ export const AuthLog = tag('AUTH');
 export const NotifLog = tag('NOTIF');
 export const LeadsLog = tag('LEADS');
 export const HomeLog = tag('HOME');
+export const DeviceLog = tag('DEVICE');

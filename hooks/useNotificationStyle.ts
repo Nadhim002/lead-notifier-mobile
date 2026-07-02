@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ref, update } from 'firebase/database';
-import { db } from '../firebase';
+import { update } from 'firebase/database';
+import { getStoredDeviceId, deviceRef } from '../deviceIdentity';
+import { DeviceLog } from '../logger';
 
 export type NotificationStyle = 'headsup' | 'phonecall';
 
@@ -22,10 +23,10 @@ export function useNotificationStyle(uid: string | null): [NotificationStyle, (s
     AsyncStorage.setItem(STORAGE_KEY, s);
 
     if (uid) {
-      AsyncStorage.getItem('deviceId').then((deviceId) => {
+      getStoredDeviceId().then((deviceId) => {
         if (!deviceId) return;
-        update(ref(db, `devices/${uid}/${deviceId}`), { notificationStyle: s }).catch((e) =>
-          console.error('[NotificationStyle] Failed to update DB:', e)
+        update(deviceRef(uid, deviceId), { notificationStyle: s }).catch((e) =>
+          DeviceLog.error('Failed to update DB:', e)
         );
       });
     }
