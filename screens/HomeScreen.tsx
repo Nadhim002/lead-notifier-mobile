@@ -21,7 +21,7 @@ export function HomeScreen({ uid, navigation }: Props & { uid: string }) {
         <Text style={styles.settingsIcon}>⚙️</Text>
       </TouchableOpacity>
       <Text style={styles.icon}>✓</Text>
-      <Text style={styles.title}>Listening for Leads two</Text>
+      <Text style={styles.title}>Listening for Leads</Text>
       <Text style={styles.subtitle}>
         Any leads purchased on your PC will alert this phone.{'\n'}Keep the app in the background.
       </Text>

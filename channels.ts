@@ -1,8 +1,9 @@
 // Android notification channel IDs — single source of truth for the mobile app.
 //
-// WIRE CONTRACT: these IDs must stay in sync with the extension's copies in
-// indiamart-extension/public/channels.js and src/panel/lib/channels.ts.
-// The extension sends pushes targeting these channel IDs; a mismatch means
+// WIRE CONTRACT: these IDs must stay in sync with the extension's single copy
+// in indiamart-extension/src/shared/channels.ts (consumed there by both the
+// panel and the service worker). The extension sends pushes targeting these
+// channel IDs; a mismatch means
 // the push references a channel that does not exist on the device and Android
 // silently drops it. Update both codebases together.
 //
