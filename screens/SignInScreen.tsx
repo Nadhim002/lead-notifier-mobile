@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
-import { useGoogleAuth } from '../hooks/useGoogleAuth';
+import { useAuth } from '../hooks/AuthProvider';
 
 export function SignInScreen() {
-  const { signIn, loading, error } = useGoogleAuth();
+  const { signIn, loading, error } = useAuth();
 
   if (loading) {
     return (

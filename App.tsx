@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, AppState } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as Notifications from 'expo-notifications';
-import { useGoogleAuth } from './hooks/useGoogleAuth';
+import { AuthProvider, useAuth } from './hooks/AuthProvider';
 import { useDeviceRegistration } from './hooks/useDeviceRegistration';
 import { setupNotifications } from './notifications';
 import { PhonecallNotification } from './modules/PhonecallNotification';
@@ -17,8 +17,8 @@ import { AppLog } from './logger';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export default function App() {
-  const { uid, loading } = useGoogleAuth();
+function AppShell() {
+  const { uid, loading } = useAuth();
   const [fcmToken, setFcmToken] = useState<string | null>(null);
   const [navReady, setNavReady] = useState(false);
 
@@ -117,6 +117,14 @@ export default function App() {
         )}
       </Stack.Navigator>
     </NavigationContainer>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppShell />
+    </AuthProvider>
   );
 }
 

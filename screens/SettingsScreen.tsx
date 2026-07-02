@@ -2,14 +2,14 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Switch } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useNotificationStyle, NotificationStyle } from '../hooks/useNotificationStyle';
-import { useGoogleAuth } from '../hooks/useGoogleAuth';
+import { useAuth } from '../hooks/AuthProvider';
 import { PhonecallNotification } from '../modules/PhonecallNotification';
 import { RootStackParamList } from '../navigation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 export function SettingsScreen({ navigation }: Props) {
-  const { uid, email, signOut } = useGoogleAuth();
+  const { uid, email, signOut } = useAuth();
   const [style, setStyle] = useNotificationStyle(uid);
 
   const selectPhonecall = () => {
