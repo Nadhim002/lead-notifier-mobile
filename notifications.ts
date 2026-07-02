@@ -70,10 +70,18 @@ export async function setupNotifications(): Promise<string | null> {
   }
 }
 
-export async function fireLeadNotification(payload: LeadPayload): Promise<void> {
+// The lead notification's title and body — derived once from the payload so the
+// banner notification and the phonecall (native full-screen) path always read
+// the same text. Previously this block was copy-pasted in three places.
+export function leadNotificationText(payload: LeadPayload): { title: string; body: string } {
   const title = payload.title ?? 'New Lead Purchased';
   const parts = [payload.buyerName, payload.city, payload.state].filter(Boolean);
   const body = parts.length > 0 ? parts.join(' — ') : 'New lead purchased!';
+  return { title, body };
+}
+
+export async function fireLeadNotification(payload: LeadPayload): Promise<void> {
+  const { title, body } = leadNotificationText(payload);
 
   NotifLog.log('Firing local notification:', title);
   await Notifications.scheduleNotificationAsync({
@@ -85,25 +93,5 @@ export async function fireLeadNotification(payload: LeadPayload): Promise<void> 
       data: payload as unknown as Record<string, unknown>,
     },
     trigger: { channelId: CHANNEL_BANNER },
-  });
-}
-
-// Used when app is backgrounded in phonecall mode — posts a heads-up notification
-// so the user sees it even when app is not visible
-export async function firePhonecallNotification(payload: LeadPayload): Promise<void> {
-  const title = payload.title ?? 'New Lead Purchased';
-  const parts = [payload.buyerName, payload.city, payload.state].filter(Boolean);
-  const body = parts.length > 0 ? parts.join(' — ') : 'New lead purchased!';
-
-  NotifLog.log('Firing phonecall notification:', title);
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title,
-      body,
-      sound: true,
-      priority: Notifications.AndroidNotificationPriority.MAX,
-      data: payload as unknown as Record<string, unknown>,
-    },
-    trigger: { channelId: CHANNEL_CALL },
   });
 }

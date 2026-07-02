@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { ref, onChildAdded, query, orderByChild, startAt } from 'firebase/database';
 import { db } from '../firebase';
-import { fireLeadNotification } from '../notifications';
+import { fireLeadNotification, leadNotificationText } from '../notifications';
 import { PhonecallNotification } from '../modules/PhonecallNotification';
 import { navigateToIncomingLead } from '../navigation';
 import { useNotificationStyle } from './useNotificationStyle';
@@ -47,9 +47,7 @@ export function useLeadListener(uid: string | null): void {
           // the fullscreen-intent notification which brings the app over the
           // lock screen showing the already-rendered IncomingLeadScreen.
           navigateToIncomingLead(lead);
-          const title = lead.title ?? 'New Lead Purchased';
-          const parts = [lead.buyerName, lead.city, lead.state].filter(Boolean);
-          const body = parts.length > 0 ? parts.join(' — ') : 'New lead purchased!';
+          const { title, body } = leadNotificationText(lead);
           PhonecallNotification.present(title, body, JSON.stringify(lead));
         }
       } else {
