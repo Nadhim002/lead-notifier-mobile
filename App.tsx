@@ -4,7 +4,11 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as Notifications from 'expo-notifications';
 import { AuthProvider, useAuth } from './hooks/AuthProvider';
-import { useDeviceRegistration } from './hooks/useDeviceRegistration';
+import { useEntitlement } from './hooks/useEntitlement';
+import { usePhoneDevices } from './hooks/usePhoneDevices';
+import { DevicesProvider } from './hooks/DevicesContext';
+import { LockoutScreen } from './screens/LockoutScreen';
+import { DeviceLimitScreen } from './screens/DeviceLimitScreen';
 import { setupNotifications } from './notifications';
 import { PhonecallNotification } from './modules/PhonecallNotification';
 import { SignInScreen } from './screens/SignInScreen';
@@ -18,11 +22,12 @@ import { AppLog } from './logger';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function AppShell() {
-  const { uid, loading } = useAuth();
+  const { uid, email, loading } = useAuth();
   const [fcmToken, setFcmToken] = useState<string | null>(null);
   const [navReady, setNavReady] = useState(false);
 
-  useDeviceRegistration(uid, fcmToken);
+  const entitlement = useEntitlement(uid ? email : null);
+  const devices = usePhoneDevices(uid ? email : null, fcmToken, entitlement);
 
   useEffect(() => {
     AppLog.log('App mounted');
@@ -93,30 +98,55 @@ function AppShell() {
     );
   }
 
+  if (!uid) {
+    return <SignInScreen />;
+  }
+
+  // Signed in — resolve subscription before doing anything else (full lockout).
+  if (!entitlement) {
+    return (
+      <View style={styles.center}>
+        <Text>Checking subscription…</Text>
+      </View>
+    );
+  }
+
+  if (!entitlement.valid) {
+    return <LockoutScreen reason={entitlement.reason} />;
+  }
+
+  // Entitled but this phone has no seat: self-service removal screen.
+  if (devices.loaded && !devices.seatAvailable) {
+    return (
+      <DeviceLimitScreen
+        phones={devices.phones}
+        maxPhones={devices.maxPhones}
+        onRename={devices.renamePhone}
+        onRemove={devices.removePhone}
+      />
+    );
+  }
+
   return (
-    <NavigationContainer ref={navigationRef} onReady={() => setNavReady(true)}>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {uid ? (
-          <>
-            <Stack.Screen name="Home">
-              {(props) => <HomeScreen {...props} uid={uid} />}
-            </Stack.Screen>
-            <Stack.Screen
-              name="IncomingLead"
-              component={IncomingLeadScreen}
-              options={{ presentation: 'fullScreenModal', animation: 'fade' }}
-            />
-            <Stack.Screen
-              name="Settings"
-              component={SettingsScreen}
-              options={{ headerShown: true, title: 'Settings', headerBackTitle: 'Back' }}
-            />
-          </>
-        ) : (
-          <Stack.Screen name="Home" component={SignInScreen as any} />
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+    <DevicesProvider value={devices}>
+      <NavigationContainer ref={navigationRef} onReady={() => setNavReady(true)}>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="Home">
+            {(props) => <HomeScreen {...props} email={email} />}
+          </Stack.Screen>
+          <Stack.Screen
+            name="IncomingLead"
+            component={IncomingLeadScreen}
+            options={{ presentation: 'fullScreenModal', animation: 'fade' }}
+          />
+          <Stack.Screen
+            name="Settings"
+            component={SettingsScreen}
+            options={{ headerShown: true, title: 'Settings', headerBackTitle: 'Back' }}
+          />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </DevicesProvider>
   );
 }
 

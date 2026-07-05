@@ -7,13 +7,13 @@ import { RootStackParamList } from '../navigation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
-export function HomeScreen({ uid, navigation }: Props & { uid: string }) {
-  useLeadListener(uid);
+export function HomeScreen({ email, navigation }: Props & { email: string | null }) {
+  useLeadListener(email);
 
   useEffect(() => {
-    HomeLog.log('HomeScreen mounted, listening for leads. uid:', uid);
+    HomeLog.log('HomeScreen mounted, listening for leads. account:', email);
     return () => HomeLog.log('HomeScreen unmounted');
-  }, [uid]);
+  }, [email]);
 
   return (
     <View style={styles.container}>

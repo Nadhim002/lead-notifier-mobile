@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { ref, onChildAdded, query, orderByChild, startAt } from 'firebase/database';
 import { db } from '../firebase';
+import { sanitizeEmail } from '../email';
 import { fireLeadNotification, leadNotificationText } from '../notifications';
 import { PhonecallNotification } from '../modules/PhonecallNotification';
 import { navigateToIncomingLead } from '../navigation';
@@ -9,16 +10,17 @@ import { useNotificationStyle } from './useNotificationStyle';
 import { LeadsLog } from '../logger';
 import { LeadPayload } from '../types/lead';
 
-export function useLeadListener(uid: string | null): void {
-  const [notificationStyle] = useNotificationStyle(uid);
+export function useLeadListener(email: string | null): void {
+  const [notificationStyle] = useNotificationStyle(email);
 
   useEffect(() => {
-    if (!uid) return;
+    if (!email) return;
 
-    LeadsLog.log('Lead listener started for uid:', uid);
+    const accountKey = sanitizeEmail(email);
+    LeadsLog.log('Lead listener started for account:', accountKey);
     const startTime = Date.now();
     const leadsRef = query(
-      ref(db, `leads/${uid}/new`),
+      ref(db, `accounts/${accountKey}/leads/new`),
       orderByChild('timestamp'),
       startAt(startTime)
     );
@@ -56,8 +58,8 @@ export function useLeadListener(uid: string | null): void {
     });
 
     return () => {
-      LeadsLog.log('Lead listener stopped for uid:', uid);
+      LeadsLog.log('Lead listener stopped for account:', accountKey);
       unsubscribe();
     };
-  }, [uid, notificationStyle]);
+  }, [email, notificationStyle]);
 }

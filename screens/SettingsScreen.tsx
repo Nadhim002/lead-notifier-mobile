@@ -1,16 +1,19 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Switch } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Switch, ScrollView } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useNotificationStyle, NotificationStyle } from '../hooks/useNotificationStyle';
 import { useAuth } from '../hooks/AuthProvider';
+import { useDevicesContext } from '../hooks/DevicesContext';
+import { PhoneDeviceList } from '../components/PhoneDeviceList';
 import { PhonecallNotification } from '../modules/PhonecallNotification';
 import { RootStackParamList } from '../navigation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 export function SettingsScreen({ navigation }: Props) {
-  const { uid, email, signOut } = useAuth();
-  const [style, setStyle] = useNotificationStyle(uid);
+  const { email, signOut } = useAuth();
+  const [style, setStyle] = useNotificationStyle(email);
+  const devices = useDevicesContext();
 
   const selectPhonecall = () => {
     setStyle('phonecall');
@@ -24,7 +27,7 @@ export function SettingsScreen({ navigation }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.section}>Notification Style</Text>
 
       <OptionRow
@@ -40,6 +43,15 @@ export function SettingsScreen({ navigation }: Props) {
         onPress={selectPhonecall}
       />
 
+      <Text style={styles.section}>
+        My Phones ({devices.phoneCount}/{devices.maxPhones})
+      </Text>
+      <PhoneDeviceList
+        phones={devices.phones}
+        onRename={devices.renamePhone}
+        onRemove={devices.removePhone}
+      />
+
       <Text style={styles.section}>Account</Text>
       <View style={styles.accountRow}>
         <Text style={styles.accountEmail}>{email ?? '—'}</Text>
@@ -47,7 +59,7 @@ export function SettingsScreen({ navigation }: Props) {
       <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut} activeOpacity={0.8}>
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -82,7 +94,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8faff',
+  },
+  content: {
     padding: 20,
+    paddingBottom: 40,
   },
   section: {
     fontSize: 12,

@@ -1,15 +1,24 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Application from 'expo-application';
+import * as Device from 'expo-device';
 import { ref, type DatabaseReference } from 'firebase/database';
 import { db } from './firebase';
 
 // Single source of truth for a phone's device identity and its Firebase record
-// location. Both useDeviceRegistration (write) and useNotificationStyle (update)
-// consume this, so the `devices/{uid}/{deviceId}` path and the id-minting rules
-// live in exactly one place.
+// location. The phone's seat lives under the account-centric schema at
+// accounts/{accountKey}/phones/{deviceId}, where accountKey is the sanitized
+// email. The id-minting rules and the path live in exactly one place here.
 
 const DEVICE_ID_KEY = 'deviceId';
+
+// Human-friendly default name for this phone (e.g. "Samsung SM-G991B"). Users
+// can rename it later in Settings. Mirrors the extension's defaultComputerName.
+export function defaultPhoneName(): string {
+  const parts = [Device.manufacturer, Device.modelName].filter(Boolean);
+  if (parts.length) return parts.join(' ');
+  return Platform.OS === 'ios' ? 'iPhone' : 'Android phone';
+}
 
 function randomUuid(): string {
   // Simple UUID v4-ish without crypto.randomUUID (not available everywhere)
@@ -61,7 +70,8 @@ export function getStoredDeviceId(): Promise<string | null> {
   return AsyncStorage.getItem(DEVICE_ID_KEY);
 }
 
-// The Firebase location for this device's record.
-export function deviceRef(uid: string, deviceId: string): DatabaseReference {
-  return ref(db, `devices/${uid}/${deviceId}`);
+// The Firebase location for this phone's record under the account-centric
+// schema. `accountKey` is the sanitized email (see email.ts).
+export function deviceRef(accountKey: string, deviceId: string): DatabaseReference {
+  return ref(db, `accounts/${accountKey}/phones/${deviceId}`);
 }
