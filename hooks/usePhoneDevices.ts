@@ -53,9 +53,17 @@ export function usePhoneDevices(
     if (!accountKey || !deviceId || !loaded || !entitlement?.valid || !fcmToken) return;
     const myRef = deviceRef(accountKey, deviceId);
     if (thisRegistered) {
-      update(myRef, { fcmToken, lastSeen: Date.now() }).catch((e) =>
-        DeviceLog.error('heartbeat failed:', e)
-      );
+      // Re-assert the device's chosen notificationStyle on every heartbeat so it
+      // can never drift from what the user selected in-app. The one-shot write in
+      // useNotificationStyle can miss (e.g. toggled before sign-in / before the
+      // deviceId was stored), which otherwise leaves the server stuck on the
+      // 'headsup' default and the extension keeps sending banners.
+      AsyncStorage.getItem('notificationStyle').then((storedStyle) => {
+        const notificationStyle = storedStyle === 'phonecall' ? 'phonecall' : 'headsup';
+        update(myRef, { fcmToken, notificationStyle, lastSeen: Date.now() }).catch((e) =>
+          DeviceLog.error('heartbeat failed:', e)
+        );
+      });
     } else if (phoneCount < maxPhones) {
       AsyncStorage.getItem('notificationStyle').then((storedStyle) => {
         const notificationStyle = storedStyle === 'phonecall' ? 'phonecall' : 'headsup';

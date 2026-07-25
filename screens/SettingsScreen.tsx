@@ -17,8 +17,11 @@ export function SettingsScreen({ navigation }: Props) {
 
   const selectPhonecall = () => {
     setStyle('phonecall');
-    // Android 14+ requires explicit user grant for full-screen intents.
-    PhonecallNotification.ensureFullScreenIntentPermission();
+    // Request the full set of permissions the phonecall/full-screen path needs
+    // (full-screen intent + "display over other apps"). General across OEMs —
+    // "display over other apps" is what lets the call launch from the background
+    // on aggressive OEMs like ColorOS/MIUI. Re-tap to grant any still missing.
+    PhonecallNotification.ensurePhonecallPermissions();
   };
 
   const handleSignOut = async () => {

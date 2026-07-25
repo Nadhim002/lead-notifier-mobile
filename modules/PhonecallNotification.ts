@@ -1,4 +1,4 @@
-import { NativeModules, Platform } from 'react-native';
+import { NativeModules, Platform, Alert } from 'react-native';
 
 const { PhonecallNotification: Native } = NativeModules;
 
@@ -49,5 +49,58 @@ export const PhonecallNotification = {
       });
     }
     return Promise.resolve();
+  },
+
+  /** True if the app may draw over other apps (background activity launch). */
+  canDrawOverlays(): Promise<boolean> {
+    if (Platform.OS === 'android' && Native) return Native.canDrawOverlays();
+    return Promise.resolve(true);
+  },
+
+  /**
+   * The GENERAL phonecall permission gate. For the full-screen call to appear
+   * over the lock screen when the phone is killed/idle, two standard Android
+   * permissions must be granted (this is cross-OEM — no per-model code):
+   *   1. USE_FULL_SCREEN_INTENT (Android 14+) — lets us post a full-screen alert
+   *   2. SYSTEM_ALERT_WINDOW / "Display over other apps" — lets that alert's
+   *      activity LAUNCH from the background (the piece aggressive OEMs block).
+   * Checks both and, for any that's missing, explains why and opens the
+   * relevant settings page (one per tap; re-run when the user returns). No-op
+   * off Android. Call when the user opts into phonecall-style alerts.
+   */
+  async ensurePhonecallPermissions(): Promise<void> {
+    if (Platform.OS !== 'android' || !Native) return;
+
+    const overlayOk: boolean = await Native.canDrawOverlays();
+    const fsiOk: boolean = await Native.canUseFullScreenIntent();
+    if (overlayOk && fsiOk) return;
+
+    // Grant the overlay permission first — it's the one that actually blocks the
+    // full-screen call from launching; full-screen-intent only affects Android 14+.
+    if (!overlayOk) {
+      Alert.alert(
+        'Allow full-screen call alerts',
+        'To make new leads ring and take over the screen (even when your phone ' +
+          'is locked), allow "Display over other apps" for Lead Notifier on the ' +
+          'next screen.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Open settings', onPress: () => Native.openOverlaySettings() },
+        ]
+      );
+      return;
+    }
+
+    if (!fsiOk) {
+      Alert.alert(
+        'Allow full-screen alerts',
+        'Allow full-screen notifications for Lead Notifier on the next screen so ' +
+          'lead calls can appear over the lock screen.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Open settings', onPress: () => Native.openFullScreenIntentSettings() },
+        ]
+      );
+    }
   },
 };
