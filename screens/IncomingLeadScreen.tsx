@@ -61,6 +61,9 @@ export function IncomingLeadScreen({ route, navigation }: Props) {
           {lead.quantity ? (
             <DetailRow label="Quantity" value={lead.quantity} />
           ) : null}
+          {lead.price != null ? (
+            <DetailRow label="Price" value={`₹${lead.price.toLocaleString()}`} />
+          ) : null}
           {lead.city || lead.state ? (
             <DetailRow
               label="Location"
