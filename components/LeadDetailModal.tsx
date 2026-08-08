@@ -1,6 +1,8 @@
 import React from 'react';
 import { Modal, View, Text, TouchableOpacity, ScrollView, Linking, StyleSheet } from 'react-native';
 import { LeadPayload } from '../types/lead';
+import { isDummyLead } from '../dummyLead';
+import { DummyLeadBadge } from './DummyLeadBadge';
 
 type Props = {
   lead: LeadPayload | null;
@@ -9,6 +11,8 @@ type Props = {
 
 export function LeadDetailModal({ lead, onClose }: Props) {
   if (!lead) return null;
+
+  const dummy = isDummyLead(lead);
 
   const handleCall = () => {
     if (!lead.buyerMobile) return;
@@ -20,9 +24,12 @@ export function LeadDetailModal({ lead, onClose }: Props) {
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <View style={styles.card}>
+        <View style={[styles.card, dummy && styles.cardDummy]}>
           <View style={styles.header}>
-            <Text style={styles.title} numberOfLines={3}>{lead.title}</Text>
+            <View style={styles.titleGroup}>
+              <Text style={styles.title} numberOfLines={3}>{lead.title}</Text>
+              {dummy ? <DummyLeadBadge /> : null}
+            </View>
             <TouchableOpacity onPress={onClose} hitSlop={12}>
               <Text style={styles.closeIcon}>✕</Text>
             </TouchableOpacity>
@@ -76,18 +83,26 @@ const styles = StyleSheet.create({
     padding: 20,
     maxHeight: '80%',
   },
+  cardDummy: {
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+    backgroundColor: '#fffbeb',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 16,
   },
-  title: {
+  titleGroup: {
     flex: 1,
+    marginRight: 12,
+    gap: 6,
+  },
+  title: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#0f172a',
-    marginRight: 12,
   },
   closeIcon: {
     fontSize: 20,

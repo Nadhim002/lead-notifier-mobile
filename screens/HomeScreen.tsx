@@ -13,7 +13,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useLeadListener } from '../hooks/useLeadListener';
 import { useLeadHistory } from '../hooks/useLeadHistory';
 import { LeadDetailModal } from '../components/LeadDetailModal';
+import { DummyLeadBadge } from '../components/DummyLeadBadge';
 import { LeadPayload } from '../types/lead';
+import { isDummyLead } from '../dummyLead';
 import { HomeLog } from '../logger';
 import { RootStackParamList } from '../navigation';
 
@@ -99,9 +101,17 @@ export function HomeScreen({ email, navigation }: Props & { email: string | null
 }
 
 function LeadTile({ lead, onPress }: { lead: LeadPayload; onPress: () => void }) {
+  const dummy = isDummyLead(lead);
   return (
-    <TouchableOpacity style={styles.tile} onPress={onPress} activeOpacity={0.7}>
-      <Text style={styles.tileTitle} numberOfLines={1}>{lead.title}</Text>
+    <TouchableOpacity
+      style={[styles.tile, dummy && styles.tileDummy]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={styles.tileTitleRow}>
+        <Text style={styles.tileTitle} numberOfLines={1}>{lead.title}</Text>
+        {dummy ? <DummyLeadBadge /> : null}
+      </View>
       <View style={styles.tileRow}>
         <Text style={styles.tileMeta}>{lead.city ?? '—'}</Text>
         <Text style={styles.tileMeta}>{lead.quantity ? `Qty: ${lead.quantity}` : '—'}</Text>
@@ -148,7 +158,20 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#e2e8f0',
   },
-  tileTitle: { fontSize: 15, fontWeight: '600', color: '#0f172a', marginBottom: 6 },
+  tileDummy: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#f59e0b',
+    borderLeftWidth: 4,
+    borderLeftColor: '#f59e0b',
+  },
+  tileTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 6,
+  },
+  tileTitle: { flex: 1, fontSize: 15, fontWeight: '600', color: '#0f172a' },
   tileRow: { flexDirection: 'row', justifyContent: 'space-between' },
   tileMeta: { fontSize: 13, color: '#475569' },
   loadMoreBtn: { paddingVertical: 14, alignItems: 'center' },

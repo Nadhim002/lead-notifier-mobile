@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { PhonecallNotification } from '../modules/PhonecallNotification';
+import { DummyLeadBadge } from '../components/DummyLeadBadge';
+import { isDummyLead } from '../dummyLead';
 import { RootStackParamList } from '../navigation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'IncomingLead'>;
@@ -20,6 +22,7 @@ const RING_VIBRATION = [0, 1000, 1000];
 
 export function IncomingLeadScreen({ route, navigation }: Props) {
   const { lead } = route.params;
+  const dummy = isDummyLead(lead);
 
   // Ring + vibrate like an incoming call while this screen is shown.
   useEffect(() => {
@@ -51,10 +54,17 @@ export function IncomingLeadScreen({ route, navigation }: Props) {
     <View style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.incomingLabel}>New Lead</Text>
+        <Text style={[styles.incomingLabel, dummy && styles.incomingLabelDummy]}>
+          {dummy ? 'Test Lead' : 'New Lead'}
+        </Text>
+        {dummy ? (
+          <View style={styles.badgeRow}>
+            <DummyLeadBadge variant="dark" />
+          </View>
+        ) : null}
         <Text style={styles.title} numberOfLines={3}>{lead.title}</Text>
 
-        <View style={styles.detailsCard}>
+        <View style={[styles.detailsCard, dummy && styles.detailsCardDummy]}>
           {lead.buyerName ? (
             <DetailRow label="Buyer" value={lead.buyerName} />
           ) : null}
@@ -125,6 +135,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textAlign: 'center',
   },
+  incomingLabelDummy: {
+    color: '#fbbf24',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
   title: {
     fontSize: 26,
     fontWeight: 'bold',
@@ -138,6 +156,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     gap: 14,
+  },
+  detailsCardDummy: {
+    borderWidth: 2,
+    borderColor: '#f59e0b',
   },
   row: {
     flexDirection: 'row',

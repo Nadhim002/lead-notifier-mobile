@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { NotifLog } from './logger';
 import { LeadPayload } from './types/lead';
 import { CHANNEL_BANNER, CHANNEL_CALL } from './channels';
+import { isDummyLead } from './dummyLead';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -74,7 +75,8 @@ export async function setupNotifications(): Promise<string | null> {
 // banner notification and the phonecall (native full-screen) path always read
 // the same text. Previously this block was copy-pasted in three places.
 export function leadNotificationText(payload: LeadPayload): { title: string; body: string } {
-  const title = payload.title ?? 'New Lead Purchased';
+  const baseTitle = payload.title ?? 'New Lead Purchased';
+  const title = isDummyLead(payload) ? `[TEST] ${baseTitle}` : baseTitle;
   const parts = [payload.buyerName, payload.city, payload.state].filter(Boolean);
   const body = parts.length > 0 ? parts.join(' — ') : 'New lead purchased!';
   return { title, body };
