@@ -80,6 +80,32 @@ class PhonecallNotificationModule(private val reactContext: ReactApplicationCont
     }
 
     /**
+     * Returns true if the app may draw over other apps ("Display over other
+     * apps" / SYSTEM_ALERT_WINDOW). This is the general, cross-OEM lever that
+     * lets the full-screen call activity LAUNCH from the background (screen off /
+     * app killed). Aggressive OEMs (ColorOS/MIUI/etc.) block background activity
+     * starts unless this is granted; without it the phonecall shows only as a
+     * notification instead of taking over the screen.
+     */
+    @ReactMethod
+    fun canDrawOverlays(promise: Promise) {
+        promise.resolve(Settings.canDrawOverlays(reactContext))
+    }
+
+    /**
+     * Opens the system "Display over other apps" settings page for this app so
+     * the user can grant it. Works the same across OEMs (standard AOSP intent).
+     */
+    @ReactMethod
+    fun openOverlaySettings() {
+        val intent = Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            Uri.parse("package:" + reactContext.packageName)
+        ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+        reactContext.startActivity(intent)
+    }
+
+    /**
      * Plays the device's default ringtone on a loop (call-style). Called when
      * the IncomingLeadScreen mounts. Safe to call repeatedly — restarts cleanly.
      */

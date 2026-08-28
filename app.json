@@ -8,11 +8,12 @@
     "android": {
       "package": "com.leadnotifier.app",
       "permissions": [
-        "NOTIFICATIONS",
-        "RECEIVE_BOOT_COMPLETED",
-        "USE_FULL_SCREEN_INTENT",
-        "VIBRATE",
-        "USE_NOTIFICATION_POLICY"
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.USE_FULL_SCREEN_INTENT",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.VIBRATE",
+        "android.permission.USE_NOTIFICATION_POLICY"
       ],
       "googleServicesFile": "./google-services.json"
     },

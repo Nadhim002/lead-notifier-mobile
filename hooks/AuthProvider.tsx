@@ -1,6 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
-import { GoogleAuthProvider, signInWithCredential, signOut as firebaseSignOut, onAuthStateChanged } from 'firebase/auth';
+import {
+  GoogleAuthProvider,
+  signInWithCredential,
+  signInWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+} from 'firebase/auth';
 import { auth } from '../firebase';
 import { AuthLog } from '../logger';
 
@@ -23,6 +29,7 @@ export interface AuthState {
   email: string | null;
   loading: boolean;
   signIn: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   error: string | null;
 }
@@ -66,6 +73,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Email/password is a secondary sign-in path. Google's own review
+  // infrastructure frequently fails to complete a Google Sign-In (device
+  // verification challenges on fresh accounts), so the Play reviewer account
+  // uses this instead. Everything downstream keys off auth.token.email, which
+  // Firebase populates identically for both providers — so the entitlement
+  // check, the accounts/{sanitizedEmail} path, and the database rules all
+  // behave exactly as they do for a Google user.
+  const signInWithEmail = async (emailAddress: string, password: string) => {
+    setError(null);
+    try {
+      await signInWithEmailAndPassword(auth, emailAddress.trim().toLowerCase(), password);
+    } catch (e: any) {
+      AuthLog.error('email sign-in failed:', e?.code, e?.message);
+      setError('Sign-in failed. Check your email and password.');
+    }
+  };
+
   const signOut = async () => {
     try {
       await GoogleSignin.signOut();
@@ -76,7 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ uid, email, loading, signIn, signOut, error }}>
+    <AuthContext.Provider value={{ uid, email, loading, signIn, signInWithEmail, signOut, error }}>
       {children}
     </AuthContext.Provider>
   );
