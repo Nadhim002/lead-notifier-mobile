@@ -11,8 +11,7 @@
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.USE_FULL_SCREEN_INTENT",
         "android.permission.SYSTEM_ALERT_WINDOW",
-        "android.permission.VIBRATE",
-        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+        "android.permission.VIBRATE"
       ],
       "googleServicesFile": "./google-services.json"
     },

@@ -16,7 +16,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.Settings
@@ -105,60 +104,6 @@ class PhonecallNotificationModule(private val reactContext: ReactApplicationCont
             reactContext.startActivity(intent)
         } catch (e: Exception) {
             Log.w(TAG, "openOverlaySettings failed", e)
-        }
-    }
-
-    /**
-     * Returns true if the app is already exempt from battery optimization.
-     * Exemption reduces the odds Doze/App Standby delays a killed-app alert.
-     */
-    @ReactMethod
-    fun canIgnoreBatteryOptimizations(promise: Promise) {
-        val pm = reactContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
-        promise.resolve(pm?.isIgnoringBatteryOptimizations(reactContext.packageName) ?: true)
-    }
-
-    /**
-     * Opens the system-wide "ignore battery optimizations" list, where the user
-     * can find and exempt Lead Notifier themselves. Used only as a fallback —
-     * some OEMs don't handle the direct request below, or the user may have
-     * declined it once (Android then requires the list for that app).
-     */
-    @ReactMethod
-    fun openBatteryOptimizationSettings() {
-        try {
-            reactContext.startActivity(
-                Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-        } catch (e: Exception) {
-            Log.w(TAG, "openBatteryOptimizationSettings failed", e)
-        }
-    }
-
-    /**
-     * Shows the direct system Allow/Deny dialog to exempt this app from battery
-     * optimization — a single tap, rather than making the user find Lead
-     * Notifier in a system-wide list themselves (the OEM battery-manager UI
-     * many phones ship is a DIFFERENT, non-standard toggle that does not
-     * actually flip this allowlist bit, which is what canIgnoreBatteryOptimizations
-     * checks). Requires the REQUEST_IGNORE_BATTERY_OPTIMIZATIONS permission,
-     * which Play reviews under its "unrestricted battery usage" declaration —
-     * falls back to the plain list screen if the OEM doesn't support the
-     * direct-request intent.
-     */
-    @ReactMethod
-    fun requestIgnoreBatteryOptimizations() {
-        try {
-            reactContext.startActivity(
-                Intent(
-                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                    Uri.parse("package:" + reactContext.packageName)
-                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-        } catch (e: Exception) {
-            Log.w(TAG, "requestIgnoreBatteryOptimizations failed, falling back to settings list", e)
-            openBatteryOptimizationSettings()
         }
     }
 

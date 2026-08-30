@@ -103,30 +103,4 @@ export const PhonecallNotification = {
       ]
     );
   },
-
-  /** True if the app is already exempt from battery optimization (Doze/App Standby). */
-  canIgnoreBatteryOptimizations(): Promise<boolean> {
-    if (Platform.OS === 'android' && Native) return Native.canIgnoreBatteryOptimizations();
-    return Promise.resolve(true);
-  },
-
-  /**
-   * Opens the system-wide battery-optimization exemption list. Used only as a
-   * fallback when the direct request below isn't supported or was already
-   * declined once.
-   */
-  openBatteryOptimizationSettings(): void {
-    if (Platform.OS === 'android' && Native) Native.openBatteryOptimizationSettings();
-  },
-
-  /**
-   * Shows the direct system Allow/Deny dialog to exempt the app from battery
-   * optimization — one tap, instead of asking the user to find Lead Notifier
-   * in a system-wide list themselves. This is the preferred entry point;
-   * openBatteryOptimizationSettings is the fallback. Optional reliability
-   * improvement, same spirit as requestOverlayForReliability.
-   */
-  requestIgnoreBatteryOptimizations(): void {
-    if (Platform.OS === 'android' && Native) Native.requestIgnoreBatteryOptimizations();
-  },
 };

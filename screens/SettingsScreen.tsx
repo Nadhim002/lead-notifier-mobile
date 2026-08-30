@@ -15,16 +15,14 @@ export function SettingsScreen({ navigation }: Props) {
   const [style, setStyle] = useNotificationStyle(email);
   const devices = useDevicesContext();
 
-  // Reliability extras (overlay, battery exemption) are optional and never
-  // gate Phone Call style — only full-screen-intent does. These rows are
-  // shown only while missing, and re-checked whenever the user returns to the
-  // app (e.g. from the system settings screen these rows link to).
+  // The overlay permission is optional and never gates Phone Call style — only
+  // full-screen-intent does. This row is shown only while overlay is missing,
+  // and re-checked whenever the user returns to the app (e.g. from the system
+  // settings screen the row links to).
   const [overlayGranted, setOverlayGranted] = useState(true);
-  const [batteryIgnored, setBatteryIgnored] = useState(true);
 
   const refreshReliabilityState = useCallback(() => {
     PhonecallNotification.canDrawOverlays().then(setOverlayGranted);
-    PhonecallNotification.canIgnoreBatteryOptimizations().then(setBatteryIgnored);
   }, []);
 
   useEffect(() => {
@@ -38,8 +36,8 @@ export function SettingsScreen({ navigation }: Props) {
   const selectPhonecall = () => {
     setStyle('phonecall');
     // Only full-screen-intent gates Phone Call style; explains why and offers
-    // to open settings if missing. Overlay and battery exemption are surfaced
-    // separately below as skippable reliability improvements.
+    // to open settings if missing. Overlay is surfaced separately below as a
+    // skippable reliability improvement.
     PhonecallNotification.ensurePhonecallPermissions();
   };
 
@@ -65,23 +63,14 @@ export function SettingsScreen({ navigation }: Props) {
         onPress={selectPhonecall}
       />
 
-      {style === 'phonecall' && (!overlayGranted || !batteryIgnored) ? (
+      {style === 'phonecall' && !overlayGranted ? (
         <>
           <Text style={styles.section}>Improve Reliability (Optional)</Text>
-          {!overlayGranted ? (
-            <ReliabilityRow
-              label="Display over other apps"
-              description="Recommended on Xiaomi, realme, vivo & OPPO phones — helps the call screen appear reliably in the background"
-              onPress={() => PhonecallNotification.requestOverlayForReliability()}
-            />
-          ) : null}
-          {!batteryIgnored ? (
-            <ReliabilityRow
-              label="Exempt from battery optimization"
-              description="Prevents Android from delaying lead alerts to save battery"
-              onPress={() => PhonecallNotification.requestIgnoreBatteryOptimizations()}
-            />
-          ) : null}
+          <ReliabilityRow
+            label="Display over other apps"
+            description="Recommended on Xiaomi, realme, vivo & OPPO phones — helps the call screen appear reliably in the background"
+            onPress={() => PhonecallNotification.requestOverlayForReliability()}
+          />
         </>
       ) : null}
 
