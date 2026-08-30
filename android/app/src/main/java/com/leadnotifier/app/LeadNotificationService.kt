@@ -27,34 +27,49 @@ class LeadNotificationService : ExpoFirebaseMessagingService() {
         }
     }
 
-    /** Looks for our { type:"phonecall", ... } marker in any plausible location. */
+    /** Wraps the flat FCM data map as a JSON tree, then walks it for our marker. */
     private fun findPhonecall(data: Map<String, String>): Phonecall? {
-        // 1. Flat top-level keys (raw FCM send, bypassing Expo)
-        if (data["type"] == "phonecall") {
+        val root = JSONObject()
+        for ((key, value) in data) root.put(key, value)
+        return searchNode(root, depth = 0)
+    }
+
+    /**
+     * Recursively searches [obj] and any nested object — whether a native
+     * JSONObject or a string that itself parses as one — for a node whose
+     * "type" is "phonecall", to a bounded depth so a malformed/circular-looking
+     * payload can't loop forever.
+     */
+    private fun searchNode(obj: JSONObject, depth: Int): Phonecall? {
+        if (obj.optString("type") == "phonecall") {
             return Phonecall(
-                data["title"] ?: "New Lead",
-                data["body"] ?: "New lead purchased!",
-                data["lead"] ?: data["leadData"] ?: "{}",
+                obj.optString("title", "New Lead"),
+                obj.optString("body", "New lead purchased!"),
+                firstNonEmpty(obj.optString("lead", ""), obj.optString("leadData", "")) ?: "{}",
             )
         }
-        // 2. Developer data JSON-stringified under the "body" key (Expo path)
-        val bodyStr = data["body"] ?: return null
-        val obj = try { JSONObject(bodyStr) } catch (e: Exception) { return null }
-        // Marker may sit at the root of that object, or nested under a "data" object.
-        val nested = obj.optJSONObject("data")
-        val candidate = when {
-            obj.optString("type") == "phonecall" -> obj
-            nested != null && nested.optString("type") == "phonecall" -> nested
-            else -> return null
+        if (depth >= MAX_DEPTH) return null
+
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val value = obj.opt(keys.next())
+            val nested: JSONObject? = when (value) {
+                is JSONObject -> value
+                is String -> try { JSONObject(value) } catch (e: Exception) { null }
+                else -> null
+            }
+            if (nested != null) {
+                val found = searchNode(nested, depth + 1)
+                if (found != null) return found
+            }
         }
-        return Phonecall(
-            candidate.optString("title", "New Lead"),
-            candidate.optString("body", "New lead purchased!"),
-            candidate.optString("lead", "{}"),
-        )
+        return null
     }
+
+    private fun firstNonEmpty(vararg values: String): String? = values.firstOrNull { it.isNotEmpty() }
 
     companion object {
         private const val TAG = "LeadNotifSvc"
+        private const val MAX_DEPTH = 4
     }
 }

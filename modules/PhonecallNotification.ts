@@ -26,81 +26,107 @@ export const PhonecallNotification = {
     return Promise.resolve(null);
   },
 
-  /** Starts the looping ringtone (call-style). No-op off Android. */
+  /** Starts the looping ringtone + vibration (call-style). No-op off Android, or if already ringing. */
   startRinging(): void {
     if (Platform.OS === 'android' && Native) Native.startRinging();
   },
 
-  /** Stops the looping ringtone. No-op off Android. */
+  /** Stops the looping ringtone + vibration. No-op off Android. */
   stopRinging(): void {
     if (Platform.OS === 'android' && Native) Native.stopRinging();
   },
 
-  /**
-   * Ensures the app may launch full-screen intents. On Android 14+ this
-   * permission is revoked by default for non-dialer apps; if missing, this
-   * sends the user to the system settings page to grant it. No-op elsewhere.
-   * Call this when the user opts into phonecall-style alerts.
-   */
-  ensureFullScreenIntentPermission(): Promise<void> {
-    if (Platform.OS === 'android' && Native) {
-      return Native.canUseFullScreenIntent().then((ok: boolean) => {
-        if (!ok) Native.openFullScreenIntentSettings();
-      });
-    }
-    return Promise.resolve();
+  /** True if the native ring/vibrate loop is currently active. */
+  isRinging(): Promise<boolean> {
+    if (Platform.OS === 'android' && Native) return Native.isRinging();
+    return Promise.resolve(false);
   },
 
-  /** True if the app may draw over other apps (background activity launch). */
+  /**
+   * True if the app may launch full-screen intents. On Android 14+ this is
+   * revoked by default for non-dialer/alarm apps. This is the ONLY permission
+   * required to select Phone Call Alert style.
+   */
+  canUseFullScreenIntent(): Promise<boolean> {
+    if (Platform.OS === 'android' && Native) return Native.canUseFullScreenIntent();
+    return Promise.resolve(true);
+  },
+
+  /**
+   * The permission gate for selecting Phone Call Alert style: full-screen
+   * intent only. If missing, explains why and offers to open the system
+   * settings page ("Not now" / "Open settings"); never requested silently.
+   * No-op off Android or if already granted.
+   */
+  async ensurePhonecallPermissions(): Promise<void> {
+    if (Platform.OS !== 'android' || !Native) return;
+
+    const fsiOk: boolean = await Native.canUseFullScreenIntent();
+    if (fsiOk) return;
+
+    Alert.alert(
+      'Allow full-screen alerts',
+      'Allow full-screen notifications for Lead Notifier on the next screen so ' +
+        'lead calls can appear over the lock screen, even when your phone is locked.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Open settings', onPress: () => Native.openFullScreenIntentSettings() },
+      ]
+    );
+  },
+
+  /** True if the app may draw over other apps (background activity launch on aggressive OEMs). */
   canDrawOverlays(): Promise<boolean> {
     if (Platform.OS === 'android' && Native) return Native.canDrawOverlays();
     return Promise.resolve(true);
   },
 
   /**
-   * The GENERAL phonecall permission gate. For the full-screen call to appear
-   * over the lock screen when the phone is killed/idle, two standard Android
-   * permissions must be granted (this is cross-OEM — no per-model code):
-   *   1. USE_FULL_SCREEN_INTENT (Android 14+) — lets us post a full-screen alert
-   *   2. SYSTEM_ALERT_WINDOW / "Display over other apps" — lets that alert's
-   *      activity LAUNCH from the background (the piece aggressive OEMs block).
-   * Checks both and, for any that's missing, explains why and opens the
-   * relevant settings page (one per tap; re-run when the user returns). No-op
-   * off Android. Call when the user opts into phonecall-style alerts.
+   * OPTIONAL reliability improvement, not a prerequisite for Phone Call Alert
+   * style. On Xiaomi/HyperOS, ColorOS, FuntouchOS and realme UI, granting
+   * "Display over other apps" is what lets the full-screen call activity
+   * launch while the app is killed/backgrounded — those OEMs restrict
+   * background activity starts beyond stock Android. Skippable; the app
+   * still rings and shows a heads-up alert without it.
    */
-  async ensurePhonecallPermissions(): Promise<void> {
+  requestOverlayForReliability(): void {
     if (Platform.OS !== 'android' || !Native) return;
+    Alert.alert(
+      'Improve reliability on this phone',
+      'Some phone brands (Xiaomi, realme, vivo, OPPO) can block the lead call ' +
+        'screen from appearing while the app is in the background unless you allow ' +
+        '"Display over other apps". This is optional — lead alerts still ring and ' +
+        'show without it — but turning it on helps them appear reliably on these brands.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Open settings', onPress: () => Native.openOverlaySettings() },
+      ]
+    );
+  },
 
-    const overlayOk: boolean = await Native.canDrawOverlays();
-    const fsiOk: boolean = await Native.canUseFullScreenIntent();
-    if (overlayOk && fsiOk) return;
+  /** True if the app is already exempt from battery optimization (Doze/App Standby). */
+  canIgnoreBatteryOptimizations(): Promise<boolean> {
+    if (Platform.OS === 'android' && Native) return Native.canIgnoreBatteryOptimizations();
+    return Promise.resolve(true);
+  },
 
-    // Grant the overlay permission first — it's the one that actually blocks the
-    // full-screen call from launching; full-screen-intent only affects Android 14+.
-    if (!overlayOk) {
-      Alert.alert(
-        'Allow full-screen call alerts',
-        'To make new leads ring and take over the screen (even when your phone ' +
-          'is locked), allow "Display over other apps" for Lead Notifier on the ' +
-          'next screen.',
-        [
-          { text: 'Not now', style: 'cancel' },
-          { text: 'Open settings', onPress: () => Native.openOverlaySettings() },
-        ]
-      );
-      return;
-    }
+  /**
+   * Opens the system-wide battery-optimization exemption list. Used only as a
+   * fallback when the direct request below isn't supported or was already
+   * declined once.
+   */
+  openBatteryOptimizationSettings(): void {
+    if (Platform.OS === 'android' && Native) Native.openBatteryOptimizationSettings();
+  },
 
-    if (!fsiOk) {
-      Alert.alert(
-        'Allow full-screen alerts',
-        'Allow full-screen notifications for Lead Notifier on the next screen so ' +
-          'lead calls can appear over the lock screen.',
-        [
-          { text: 'Not now', style: 'cancel' },
-          { text: 'Open settings', onPress: () => Native.openFullScreenIntentSettings() },
-        ]
-      );
-    }
+  /**
+   * Shows the direct system Allow/Deny dialog to exempt the app from battery
+   * optimization — one tap, instead of asking the user to find Lead Notifier
+   * in a system-wide list themselves. This is the preferred entry point;
+   * openBatteryOptimizationSettings is the fallback. Optional reliability
+   * improvement, same spirit as requestOverlayForReliability.
+   */
+  requestIgnoreBatteryOptimizations(): void {
+    if (Platform.OS === 'android' && Native) Native.requestIgnoreBatteryOptimizations();
   },
 };

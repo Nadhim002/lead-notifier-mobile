@@ -1,6 +1,7 @@
 import {
   ConfigPlugin,
   withAndroidManifest,
+  withAppBuildGradle,
   withDangerousMod,
   AndroidConfig,
 } from '@expo/config-plugins';
@@ -9,9 +10,15 @@ import * as path from 'path';
 
 const PACKAGE_NAME = 'com.leadnotifier.app';
 
-// Config plugins run in a CommonJS prebuild context that can't resolve the
-// sibling TS module, so the phonecall channel ID is duplicated here as a
-// literal. MUST stay in sync with CHANNEL_CALL in ../channels.ts.
+// Config plugins run in a CommonJS prebuild context that can't resolve a
+// sibling .ts module (confirmed: `import { CHANNEL_CALL } from '../channels'`
+// fails at prebuild time with a require-resolution error, since channels.ts
+// has no compiled .js counterpart on disk) — so the channel IDs are
+// duplicated here as literals. MUST stay in sync with channels.ts. This is a
+// cross-repo wire contract with the extension (see constitution principle II)
+// — a mismatch here means a native post silently targets a non-existent
+// channel and Android drops it.
+const CHANNEL_BANNER = 'lead-alerts-banner';
 const CHANNEL_CALL = 'lead-alerts-call';
 
 // ---------------------------------------------------------------------------
@@ -20,16 +27,27 @@ const CHANNEL_CALL = 'lead-alerts-call';
 
 const PHONECALL_MODULE_KT = `package ${PACKAGE_NAME}
 
+import android.app.Notification
+import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.PowerManager
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.provider.Settings
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -41,8 +59,6 @@ class PhonecallNotificationModule(private val reactContext: ReactApplicationCont
 
     override fun getName() = "PhonecallNotification"
 
-    private var ringtonePlayer: MediaPlayer? = null
-
     /** Called from JS (backgrounded state) to post a fullscreen-intent notification. */
     @ReactMethod
     fun present(title: String, body: String, leadDataJson: String) {
@@ -53,6 +69,9 @@ class PhonecallNotificationModule(private val reactContext: ReactApplicationCont
      * Returns true if the app may launch full-screen intents. On Android 14+
      * (API 34) this permission is revoked by default for non-dialer/alarm apps;
      * the user must grant it in system settings (see openFullScreenIntentSettings).
+     * This is the ONLY permission required to select Phone Call Alert style —
+     * SYSTEM_ALERT_WINDOW is a separate, optional reliability improvement (see
+     * canDrawOverlays below), not a prerequisite.
      */
     @ReactMethod
     fun canUseFullScreenIntent(promise: Promise) {
@@ -66,26 +85,33 @@ class PhonecallNotificationModule(private val reactContext: ReactApplicationCont
 
     /**
      * Opens the system settings page where the user grants full-screen-intent
-     * permission for this app (Android 14+). No-op on older versions.
+     * permission for this app (Android 14+). No-op on older versions. Some OEM
+     * builds omit this settings screen, so a failed launch is swallowed rather
+     * than crossing the bridge as an unhandled rejection.
      */
     @ReactMethod
     fun openFullScreenIntentSettings() {
         if (Build.VERSION.SDK_INT >= 34) {
-            val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
-                data = Uri.parse("package:" + reactContext.packageName)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            try {
+                val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+                    data = Uri.parse("package:" + reactContext.packageName)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                reactContext.startActivity(intent)
+            } catch (e: Exception) {
+                Log.w(TAG, "openFullScreenIntentSettings failed", e)
             }
-            reactContext.startActivity(intent)
         }
     }
 
     /**
      * Returns true if the app may draw over other apps ("Display over other
-     * apps" / SYSTEM_ALERT_WINDOW). This is the general, cross-OEM lever that
-     * lets the full-screen call activity LAUNCH from the background (screen off /
-     * app killed). Aggressive OEMs (ColorOS/MIUI/etc.) block background activity
-     * starts unless this is granted; without it the phonecall shows only as a
-     * notification instead of taking over the screen.
+     * apps" / SYSTEM_ALERT_WINDOW). NOT required for the full-screen call to
+     * work on stock Android — the system launches a full-screen-intent activity
+     * as an exempt background start regardless. It matters only on OEM builds
+     * (Xiaomi/HyperOS, ColorOS, FuntouchOS, realme UI) that impose extra
+     * background-launch restrictions on top of AOSP. Offered as a separate,
+     * skippable reliability improvement, never a prerequisite.
      */
     @ReactMethod
     fun canDrawOverlays(promise: Promise) {
@@ -98,48 +124,87 @@ class PhonecallNotificationModule(private val reactContext: ReactApplicationCont
      */
     @ReactMethod
     fun openOverlaySettings() {
-        val intent = Intent(
-            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-            Uri.parse("package:" + reactContext.packageName)
-        ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-        reactContext.startActivity(intent)
+        try {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:" + reactContext.packageName)
+            ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+            reactContext.startActivity(intent)
+        } catch (e: Exception) {
+            Log.w(TAG, "openOverlaySettings failed", e)
+        }
     }
 
     /**
-     * Plays the device's default ringtone on a loop (call-style). Called when
-     * the IncomingLeadScreen mounts. Safe to call repeatedly — restarts cleanly.
+     * Returns true if the app is already exempt from battery optimization.
+     * Exemption reduces the odds Doze/App Standby delays a killed-app alert.
      */
     @ReactMethod
-    fun startRinging() {
-        stopRinging()
+    fun canIgnoreBatteryOptimizations(promise: Promise) {
+        val pm = reactContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        promise.resolve(pm?.isIgnoringBatteryOptimizations(reactContext.packageName) ?: true)
+    }
+
+    /**
+     * Opens the system-wide "ignore battery optimizations" list, where the user
+     * can find and exempt Lead Notifier themselves. Used only as a fallback —
+     * some OEMs don't handle the direct request below, or the user may have
+     * declined it once (Android then requires the list for that app).
+     */
+    @ReactMethod
+    fun openBatteryOptimizationSettings() {
         try {
-            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            val player = MediaPlayer().apply {
-                setDataSource(reactContext.applicationContext, uri)
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build()
-                )
-                isLooping = true
-                prepare()
-                start()
-            }
-            ringtonePlayer = player
+            reactContext.startActivity(
+                Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
         } catch (e: Exception) {
-            // ignore — vibration still provides the alert
+            Log.w(TAG, "openBatteryOptimizationSettings failed", e)
         }
     }
 
-    /** Stops the looping ringtone. Called on dismiss/answer or screen unmount. */
+    /**
+     * Shows the direct system Allow/Deny dialog to exempt this app from battery
+     * optimization — a single tap, rather than making the user find Lead
+     * Notifier in a system-wide list themselves (the OEM battery-manager UI
+     * many phones ship is a DIFFERENT, non-standard toggle that does not
+     * actually flip this allowlist bit, which is what canIgnoreBatteryOptimizations
+     * checks). Requires the REQUEST_IGNORE_BATTERY_OPTIMIZATIONS permission,
+     * which Play reviews under its "unrestricted battery usage" declaration —
+     * falls back to the plain list screen if the OEM doesn't support the
+     * direct-request intent.
+     */
+    @ReactMethod
+    fun requestIgnoreBatteryOptimizations() {
+        try {
+            reactContext.startActivity(
+                Intent(
+                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:" + reactContext.packageName)
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "requestIgnoreBatteryOptimizations failed, falling back to settings list", e)
+            openBatteryOptimizationSettings()
+        }
+    }
+
+    /** Starts the looping ringtone + vibration (call-style). Safe to call repeatedly — no-ops if already ringing. */
+    @ReactMethod
+    fun startRinging() {
+        Companion.startRinging(reactContext.applicationContext)
+    }
+
+    /** Stops the looping ringtone + vibration. Called on dismiss/answer or screen unmount. */
     @ReactMethod
     fun stopRinging() {
-        ringtonePlayer?.let {
-            try { if (it.isPlaying) it.stop(); it.release() } catch (e: Exception) {}
-        }
-        ringtonePlayer = null
+        Companion.stopRinging()
+    }
+
+    /** Returns true if the native ring/vibrate loop is currently active. */
+    @ReactMethod
+    fun isRinging(promise: Promise) {
+        promise.resolve(Companion.isRinging())
     }
 
     /**
@@ -161,8 +226,173 @@ class PhonecallNotificationModule(private val reactContext: ReactApplicationCont
     }
 
     companion object {
+        private const val TAG = "PhonecallNotifModule"
         private const val NOTIFICATION_TAG = "phonecall_lead"
         private const val NOTIFICATION_ID = 9001
+        private const val ACTION_STOP_RINGING = "${PACKAGE_NAME}.STOP_RINGING"
+
+        // Ringing pattern mirrors the "lead-alerts-call" channel's vibration so
+        // silent/vibrate-mode devices (whose channel sound is suppressed) still
+        // get the same call-like pulses via the native Vibrator.
+        private val RING_VIBRATION_PATTERN = longArrayOf(0, 1000, 1000, 1000, 1000, 1000, 1000)
+        private const val AUTO_STOP_MS = 45_000L
+
+        private var ringtonePlayer: MediaPlayer? = null
+        private var vibrator: Vibrator? = null
+        private var audioManager: AudioManager? = null
+        private var audioFocusRequest: AudioFocusRequest? = null
+        private var autoStopHandler: Handler? = null
+        private var autoStopRunnable: Runnable? = null
+
+        fun isRinging(): Boolean = ringtonePlayer != null || vibrator != null
+
+        /**
+         * Creates (or updates, if missing) the notification channels natively so
+         * a native FCM post is never dropped for targeting a non-existent
+         * channel — which happens silently on Android O+ if this runs before
+         * the JS side's setupNotifications() has ever completed. Settings must
+         * mirror notifications.ts exactly; createNotificationChannel() is a
+         * no-op for an already-existing channel ID and never overrides a
+         * setting the user has since changed.
+         */
+        fun ensureChannels(context: Context) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+            if (nm.getNotificationChannel("${CHANNEL_CALL}") == null) {
+                nm.createNotificationChannel(
+                    NotificationChannel("${CHANNEL_CALL}", "Lead Alerts — Phone Call", NotificationManager.IMPORTANCE_HIGH).apply {
+                        enableVibration(true)
+                        vibrationPattern = RING_VIBRATION_PATTERN
+                        enableLights(true)
+                        lightColor = Color.RED
+                        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                        setShowBadge(true)
+                    }
+                )
+            }
+            if (nm.getNotificationChannel("${CHANNEL_BANNER}") == null) {
+                nm.createNotificationChannel(
+                    NotificationChannel("${CHANNEL_BANNER}", "Lead Alerts", NotificationManager.IMPORTANCE_HIGH).apply {
+                        enableVibration(true)
+                        vibrationPattern = longArrayOf(0, 2000)
+                        enableLights(true)
+                        lightColor = Color.RED
+                        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                        setShowBadge(true)
+                    }
+                )
+            }
+        }
+
+        /**
+         * Starts the looping ringtone + vibration immediately — independent of
+         * React Native booting or the full-screen activity ever launching, so a
+         * killed-app alert rings even when it only surfaces as a heads-up
+         * notification (FSI denied, phone unlocked, or an OEM restriction).
+         * No-ops if already ringing, so a later JS-side startRinging() call
+         * (e.g. IncomingLeadScreen mounting) doesn't restart the loop.
+         */
+        fun startRinging(context: Context) {
+            if (isRinging()) return
+            try {
+                val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                audioManager = am
+
+                val attrs = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                        .setAudioAttributes(attrs)
+                        .build()
+                    audioFocusRequest = request
+                    am.requestAudioFocus(request)
+                } else {
+                    @Suppress("DEPRECATION")
+                    am.requestAudioFocus(null, AudioManager.STREAM_RING, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                }
+
+                // Respect the ringer mode: only play audio in normal mode. Vibrate
+                // mode and silent mode fall through to vibration-only below.
+                if (am.ringerMode == AudioManager.RINGER_MODE_NORMAL) {
+                    val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                        ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                    if (uri != null) {
+                        ringtonePlayer = MediaPlayer().apply {
+                            setDataSource(context.applicationContext, uri)
+                            setAudioAttributes(attrs)
+                            isLooping = true
+                            prepare()
+                            start()
+                        }
+                    }
+                }
+
+                if (am.ringerMode != AudioManager.RINGER_MODE_SILENT) {
+                    val vib = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                    vibrator = vib
+                    if (vib != null && vib.hasVibrator()) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            vib.vibrate(VibrationEffect.createWaveform(RING_VIBRATION_PATTERN, 0))
+                        } else {
+                            @Suppress("DEPRECATION")
+                            vib.vibrate(RING_VIBRATION_PATTERN, 0)
+                        }
+                    }
+                }
+
+                val handler = Handler(Looper.getMainLooper())
+                val stopRunnable = Runnable { stopRinging() }
+                autoStopHandler = handler
+                autoStopRunnable = stopRunnable
+                handler.postDelayed(stopRunnable, AUTO_STOP_MS)
+            } catch (e: Exception) {
+                Log.w(TAG, "startRinging failed", e)
+                // Ring failed — vibration (if it started before the failure) or
+                // the channel's own default sound still provides the alert.
+            }
+        }
+
+        /** Stops the looping ringtone + vibration and releases every resource it holds. */
+        fun stopRinging() {
+            autoStopHandler?.let { h -> autoStopRunnable?.let { h.removeCallbacks(it) } }
+            autoStopHandler = null
+            autoStopRunnable = null
+
+            ringtonePlayer?.let {
+                try {
+                    if (it.isPlaying) it.stop()
+                } catch (e: Exception) {
+                    // ignore — still release below
+                } finally {
+                    it.release()
+                }
+            }
+            ringtonePlayer = null
+
+            vibrator?.cancel()
+            vibrator = null
+
+            try {
+                val am = audioManager
+                val req = audioFocusRequest
+                if (am != null) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && req != null) {
+                        am.abandonAudioFocusRequest(req)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        am.abandonAudioFocus(null)
+                    }
+                }
+            } catch (e: Exception) {
+                // ignore
+            }
+            audioManager = null
+            audioFocusRequest = null
+        }
 
         fun postFullScreenNotification(
             context: Context,
@@ -170,6 +400,8 @@ class PhonecallNotificationModule(private val reactContext: ReactApplicationCont
             body: String,
             leadDataJson: String = "{}",
         ) {
+            ensureChannels(context)
+
             val launchIntent = context.packageManager
                 .getLaunchIntentForPackage(context.packageName)
                 ?.apply {
@@ -184,6 +416,13 @@ class PhonecallNotificationModule(private val reactContext: ReactApplicationCont
 
             val pendingIntent = PendingIntent.getActivity(context, 0, launchIntent, piFlags)
 
+            // Delete intent stops the native ring/vibrate loop if the user swipes
+            // the notification away without ever opening the app.
+            val stopIntent = Intent(context, StopRingingReceiver::class.java).apply {
+                action = ACTION_STOP_RINGING
+            }
+            val deleteIntent = PendingIntent.getBroadcast(context, 0, stopIntent, piFlags)
+
             val iconRes = context.resources.getIdentifier(
                 "notification_icon", "drawable", context.packageName
             ).takeIf { it != 0 } ?: android.R.drawable.ic_dialog_info
@@ -196,11 +435,18 @@ class PhonecallNotificationModule(private val reactContext: ReactApplicationCont
                 .setCategory(NotificationCompat.CATEGORY_CALL)
                 .setFullScreenIntent(pendingIntent, true)
                 .setContentIntent(pendingIntent)
+                .setDeleteIntent(deleteIntent)
                 .setAutoCancel(true)
                 .build()
 
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             nm.notify(NOTIFICATION_TAG, NOTIFICATION_ID, notification)
+
+            // Ring immediately — do not wait for the full-screen activity to
+            // launch or for React Native to boot. This is what makes a killed-app
+            // alert behave like an incoming call rather than a notification chime,
+            // even when the takeover degrades to a plain heads-up.
+            startRinging(context)
         }
     }
 }
@@ -222,6 +468,23 @@ class PhonecallNotificationPackage : ReactPackage {
 }
 `;
 
+// Stops the native ring/vibrate loop when the user swipes away the
+// full-screen/heads-up notification without opening the app. Registered as
+// the notification's setDeleteIntent target; targeted explicitly by
+// component, so no intent-filter/action is required in the manifest entry.
+const STOP_RINGING_RECEIVER_KT = `package ${PACKAGE_NAME}
+
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+
+class StopRingingReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        PhonecallNotificationModule.stopRinging()
+    }
+}
+`;
+
 // Subclasses ExpoFirebaseMessagingService so all non-phonecall FCM messages
 // (token refresh, regular pushes) still flow through expo-notifications.
 //
@@ -229,10 +492,12 @@ class PhonecallNotificationPackage : ReactPackage {
 // (no top-level title/body) whose developer \`data\` object carries
 // { type:"phonecall", title, body, lead }. Expo routes the developer data into
 // the FCM data map, but the exact key/nesting through Expo's push service is
-// not contractually documented — so findPhonecall() searches every plausible
-// location (flat data["type"], a JSON string under data["body"], and a nested
-// "data" object inside it). The raw payload is logged once per message so the
-// real shape can be confirmed on-device via:  adb logcat -s LeadNotifSvc
+// not contractually documented, and may itself be JSON-stringified one or more
+// levels deep — so findPhonecall() walks the whole data map recursively
+// (bounded depth), parsing any string value that looks like JSON, until it
+// finds a node whose "type" is "phonecall". The raw payload is logged once per
+// message so the real shape can be confirmed on-device via:
+//   adb logcat -s LeadNotifSvc
 const LEAD_NOTIFICATION_SERVICE_KT = `package ${PACKAGE_NAME}
 
 import android.util.Log
@@ -262,35 +527,50 @@ class LeadNotificationService : ExpoFirebaseMessagingService() {
         }
     }
 
-    /** Looks for our { type:"phonecall", ... } marker in any plausible location. */
+    /** Wraps the flat FCM data map as a JSON tree, then walks it for our marker. */
     private fun findPhonecall(data: Map<String, String>): Phonecall? {
-        // 1. Flat top-level keys (raw FCM send, bypassing Expo)
-        if (data["type"] == "phonecall") {
+        val root = JSONObject()
+        for ((key, value) in data) root.put(key, value)
+        return searchNode(root, depth = 0)
+    }
+
+    /**
+     * Recursively searches [obj] and any nested object — whether a native
+     * JSONObject or a string that itself parses as one — for a node whose
+     * "type" is "phonecall", to a bounded depth so a malformed/circular-looking
+     * payload can't loop forever.
+     */
+    private fun searchNode(obj: JSONObject, depth: Int): Phonecall? {
+        if (obj.optString("type") == "phonecall") {
             return Phonecall(
-                data["title"] ?: "New Lead",
-                data["body"] ?: "New lead purchased!",
-                data["lead"] ?: data["leadData"] ?: "{}",
+                obj.optString("title", "New Lead"),
+                obj.optString("body", "New lead purchased!"),
+                firstNonEmpty(obj.optString("lead", ""), obj.optString("leadData", "")) ?: "{}",
             )
         }
-        // 2. Developer data JSON-stringified under the "body" key (Expo path)
-        val bodyStr = data["body"] ?: return null
-        val obj = try { JSONObject(bodyStr) } catch (e: Exception) { return null }
-        // Marker may sit at the root of that object, or nested under a "data" object.
-        val nested = obj.optJSONObject("data")
-        val candidate = when {
-            obj.optString("type") == "phonecall" -> obj
-            nested != null && nested.optString("type") == "phonecall" -> nested
-            else -> return null
+        if (depth >= MAX_DEPTH) return null
+
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val value = obj.opt(keys.next())
+            val nested: JSONObject? = when (value) {
+                is JSONObject -> value
+                is String -> try { JSONObject(value) } catch (e: Exception) { null }
+                else -> null
+            }
+            if (nested != null) {
+                val found = searchNode(nested, depth + 1)
+                if (found != null) return found
+            }
         }
-        return Phonecall(
-            candidate.optString("title", "New Lead"),
-            candidate.optString("body", "New lead purchased!"),
-            candidate.optString("lead", "{}"),
-        )
+        return null
     }
+
+    private fun firstNonEmpty(vararg values: String): String? = values.firstOrNull { it.isNotEmpty() }
 
     companion object {
         private const val TAG = "LeadNotifSvc"
+        private const val MAX_DEPTH = 4
     }
 }
 `;
@@ -312,6 +592,7 @@ const withFullScreenIntent: ConfigPlugin = (config) => {
       fs.writeFileSync(path.join(pkgDir, 'PhonecallNotificationModule.kt'), PHONECALL_MODULE_KT);
       fs.writeFileSync(path.join(pkgDir, 'PhonecallNotificationPackage.kt'), PHONECALL_PACKAGE_KT);
       fs.writeFileSync(path.join(pkgDir, 'LeadNotificationService.kt'), LEAD_NOTIFICATION_SERVICE_KT);
+      fs.writeFileSync(path.join(pkgDir, 'StopRingingReceiver.kt'), STOP_RINGING_RECEIVER_KT);
 
       // Register the React package in MainApplication.kt
       const mainAppPath = path.join(pkgDir, 'MainApplication.kt');
@@ -401,6 +682,43 @@ const withFullScreenIntent: ConfigPlugin = (config) => {
       });
     }
 
+    // Register the delete-intent receiver that stops native ringing when the
+    // user swipes away the notification without opening the app. Targeted
+    // only by explicit component (see postFullScreenNotification), so no
+    // intent-filter is needed.
+    if (!app.receiver) (app as any).receiver = [];
+    const receivers: any[] = (app as any).receiver;
+    const hasStopReceiver = receivers.some(
+      (r) => r.$['android:name'] === `${PACKAGE_NAME}.StopRingingReceiver`,
+    );
+    if (!hasStopReceiver) {
+      receivers.push({
+        $: {
+          'android:name': `${PACKAGE_NAME}.StopRingingReceiver`,
+          'android:exported': 'false',
+        },
+      });
+    }
+
+    return mod;
+  });
+
+  // 3. Ensure the app module's own compile classpath has firebase-messaging.
+  // expo-notifications declares it as `implementation` (not `api`) in its own
+  // module, so it is NOT transitively exposed to a sibling Gradle module —
+  // without this, LeadNotificationService.kt's `import
+  // com.google.firebase.messaging.RemoteMessage` fails to resolve at compile
+  // time. This must go through the plugin, not a hand-edit to
+  // android/app/build.gradle, or the next `expo prebuild --clean` silently
+  // drops it and the native build breaks.
+  config = withAppBuildGradle(config, (mod) => {
+    const dep = 'implementation("com.google.firebase:firebase-messaging")';
+    if (!mod.modResults.contents.includes(dep)) {
+      mod.modResults.contents = mod.modResults.contents.replace(
+        'implementation("com.facebook.react:react-android")',
+        `implementation("com.facebook.react:react-android")\n    ${dep} // needed for RemoteMessage in LeadNotificationService.kt — see plugins/withFullScreenIntent.ts`,
+      );
+    }
     return mod;
   });
 

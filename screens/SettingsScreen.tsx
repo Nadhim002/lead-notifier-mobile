@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Switch, ScrollView } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Switch, ScrollView, AppState } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useNotificationStyle, NotificationStyle } from '../hooks/useNotificationStyle';
 import { useAuth } from '../hooks/AuthProvider';
@@ -15,12 +15,31 @@ export function SettingsScreen({ navigation }: Props) {
   const [style, setStyle] = useNotificationStyle(email);
   const devices = useDevicesContext();
 
+  // Reliability extras (overlay, battery exemption) are optional and never
+  // gate Phone Call style — only full-screen-intent does. These rows are
+  // shown only while missing, and re-checked whenever the user returns to the
+  // app (e.g. from the system settings screen these rows link to).
+  const [overlayGranted, setOverlayGranted] = useState(true);
+  const [batteryIgnored, setBatteryIgnored] = useState(true);
+
+  const refreshReliabilityState = useCallback(() => {
+    PhonecallNotification.canDrawOverlays().then(setOverlayGranted);
+    PhonecallNotification.canIgnoreBatteryOptimizations().then(setBatteryIgnored);
+  }, []);
+
+  useEffect(() => {
+    refreshReliabilityState();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshReliabilityState();
+    });
+    return () => sub.remove();
+  }, [refreshReliabilityState]);
+
   const selectPhonecall = () => {
     setStyle('phonecall');
-    // Request the full set of permissions the phonecall/full-screen path needs
-    // (full-screen intent + "display over other apps"). General across OEMs —
-    // "display over other apps" is what lets the call launch from the background
-    // on aggressive OEMs like ColorOS/MIUI. Re-tap to grant any still missing.
+    // Only full-screen-intent gates Phone Call style; explains why and offers
+    // to open settings if missing. Overlay and battery exemption are surfaced
+    // separately below as skippable reliability improvements.
     PhonecallNotification.ensurePhonecallPermissions();
   };
 
@@ -45,6 +64,26 @@ export function SettingsScreen({ navigation }: Props) {
         selected={style === 'phonecall'}
         onPress={selectPhonecall}
       />
+
+      {style === 'phonecall' && (!overlayGranted || !batteryIgnored) ? (
+        <>
+          <Text style={styles.section}>Improve Reliability (Optional)</Text>
+          {!overlayGranted ? (
+            <ReliabilityRow
+              label="Display over other apps"
+              description="Recommended on Xiaomi, realme, vivo & OPPO phones — helps the call screen appear reliably in the background"
+              onPress={() => PhonecallNotification.requestOverlayForReliability()}
+            />
+          ) : null}
+          {!batteryIgnored ? (
+            <ReliabilityRow
+              label="Exempt from battery optimization"
+              description="Prevents Android from delaying lead alerts to save battery"
+              onPress={() => PhonecallNotification.requestIgnoreBatteryOptimizations()}
+            />
+          ) : null}
+        </>
+      ) : null}
 
       <Text style={styles.section}>
         My Phones ({devices.phoneCount}/{devices.maxPhones})
@@ -93,6 +132,23 @@ function OptionRow({
   );
 }
 
+function ReliabilityRow({
+  label,
+  description,
+  onPress,
+}: {
+  label: string;
+  description: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity style={styles.reliabilityRow} onPress={onPress} activeOpacity={0.7}>
+      <Text style={styles.reliabilityLabel}>{label}</Text>
+      <Text style={styles.reliabilityDesc}>{description}</Text>
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -136,6 +192,24 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   optionDesc: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  reliabilityRow: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  reliabilityLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 2,
+  },
+  reliabilityDesc: {
     fontSize: 12,
     color: '#6b7280',
   },

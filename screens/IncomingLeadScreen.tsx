@@ -24,11 +24,20 @@ export function IncomingLeadScreen({ route, navigation }: Props) {
   const { lead } = route.params;
   const dummy = isDummyLead(lead);
 
-  // Ring + vibrate like an incoming call while this screen is shown.
+  // Ring + vibrate like an incoming call while this screen is shown. If the
+  // native side is already ringing (started the instant the notification was
+  // posted — see PhonecallNotificationModule.postFullScreenNotification),
+  // startRinging() below no-ops and the JS Vibration call is skipped so the
+  // two vibration sources don't stack.
   useEffect(() => {
-    PhonecallNotification.startRinging();
-    Vibration.vibrate(RING_VIBRATION, true);
+    let cancelled = false;
+    PhonecallNotification.isRinging().then((alreadyRinging) => {
+      if (cancelled) return;
+      if (!alreadyRinging) Vibration.vibrate(RING_VIBRATION, true);
+      PhonecallNotification.startRinging();
+    });
     return () => {
+      cancelled = true;
       PhonecallNotification.stopRinging();
       Vibration.cancel();
     };

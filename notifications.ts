@@ -33,6 +33,10 @@ export async function setupNotifications(): Promise<string | null> {
 
   if (Platform.OS === 'android') {
     // Standard heads-up notification — vibration matches ~2s default notification sound
+    // Note: bypassDnd is intentionally omitted — it requires Notification Policy
+    // Access (ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS), which this app never
+    // requests, so the platform silently ignores it. Setting it here would be a
+    // no-op that misleadingly implies DND-bypass behavior.
     await Notifications.setNotificationChannelAsync(CHANNEL_BANNER, {
       name: 'Lead Alerts',
       importance: Notifications.AndroidImportance.MAX,
@@ -41,7 +45,6 @@ export async function setupNotifications(): Promise<string | null> {
       enableLights: true,
       lightColor: '#FF0000',
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-      bypassDnd: true,
       showBadge: true,
     });
     // Phonecall-style — repeating ring pattern (1s on / 1s off × 3) to mimic incoming call
@@ -53,7 +56,6 @@ export async function setupNotifications(): Promise<string | null> {
       enableLights: true,
       lightColor: '#FF0000',
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-      bypassDnd: true,
       showBadge: true,
     });
     NotifLog.log(`Android channels created: ${CHANNEL_BANNER}, ${CHANNEL_CALL}`);

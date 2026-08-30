@@ -9,11 +9,10 @@
       "package": "com.leadnotifier.app",
       "permissions": [
         "android.permission.POST_NOTIFICATIONS",
-        "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.USE_FULL_SCREEN_INTENT",
         "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.VIBRATE",
-        "android.permission.USE_NOTIFICATION_POLICY"
+        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
       ],
       "googleServicesFile": "./google-services.json"
     },

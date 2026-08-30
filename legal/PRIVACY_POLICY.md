@@ -120,11 +120,10 @@ Lead Notifier is a business tool intended for users aged 18 and over. It is not 
 | Permission | Why |
 |---|---|
 | Notifications | To show lead alerts. Without it the app cannot do its job. |
-| Display over other apps | Only if you choose "Phone Call Alert" style — lets the alert appear over the lock screen and other apps. Optional. |
-| Full-screen notifications | Only if you choose "Phone Call Alert" style — lets a lead take over the screen like an incoming call. Optional. |
-| Run at startup | Restores alert delivery after you restart your phone. |
+| Full-screen notifications | Only if you choose "Phone Call Alert" style — lets a lead take over the screen like an incoming call. Optional; the app degrades to a standard notification without it. |
+| Display over other apps | Optional, and not required for "Phone Call Alert" style to work. On some phone brands (Xiaomi, realme, vivo, OPPO) granting it helps the call screen appear reliably in the background; every other phone works the same without it. |
+| Ignore battery optimization | Optional. Some phones delay or block lead alerts to save battery; granting this lets Lead Notifier deliver time-critical alerts (a purchased lead you must call within minutes) without that delay. You can decline it and every other feature works the same. |
 | Vibrate | Vibrates on a new lead. |
-| Do Not Disturb access | Lets you allow urgent lead alerts through Do Not Disturb. Optional; you grant it in system settings. |
 | Network access | To connect to the service. |
 
 None of these permissions are used to collect data beyond what is described in section 3.
