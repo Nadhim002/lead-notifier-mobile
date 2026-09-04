@@ -58,6 +58,7 @@ export function useLeadHistory(email: string | null) {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const accountKeyRef = useRef<string | null>(null);
 
@@ -90,7 +91,7 @@ export function useLeadHistory(email: string | null) {
     const oldestTimestamp = leads[leads.length - 1].timestamp;
     if (oldestTimestamp == null) return;
     setLoadingMore(true);
-    setError(null);
+    setLoadMoreError(null);
     try {
       const snapshot = await get(
         query(
@@ -105,7 +106,7 @@ export function useLeadHistory(email: string | null) {
       setHasMore(older.length === PAGE_SIZE);
     } catch (e) {
       LeadsLog.error('Failed to load more leads:', e);
-      setError('Could not load more leads.');
+      setLoadMoreError('Could not load more leads.');
     } finally {
       setLoadingMore(false);
     }
@@ -116,6 +117,7 @@ export function useLeadHistory(email: string | null) {
     loading,
     loadingMore,
     error,
+    loadMoreError,
     hasMore,
     refresh,
     loadMore,

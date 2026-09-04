@@ -39,7 +39,10 @@ export async function setupNotifications(): Promise<string | null> {
     // no-op that misleadingly implies DND-bypass behavior.
     await Notifications.setNotificationChannelAsync(CHANNEL_BANNER, {
       name: 'Lead Alerts',
-      importance: Notifications.AndroidImportance.MAX,
+      // Must match PhonecallNotificationModule.kt's ensureChannels() — Android
+      // freezes a channel's importance at first creation, and whichever side
+      // creates it first on a given install decides it for that install's life.
+      importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 2000],
       enableVibrate: true,
       enableLights: true,
@@ -50,7 +53,8 @@ export async function setupNotifications(): Promise<string | null> {
     // Phonecall-style — repeating ring pattern (1s on / 1s off × 3) to mimic incoming call
     await Notifications.setNotificationChannelAsync(CHANNEL_CALL, {
       name: 'Lead Alerts — Phone Call',
-      importance: Notifications.AndroidImportance.MAX,
+      // See CHANNEL_BANNER above — must match the native channel's importance.
+      importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 1000, 1000, 1000, 1000, 1000, 1000],
       enableVibrate: true,
       enableLights: true,

@@ -42,11 +42,18 @@ class LeadNotificationService : ExpoFirebaseMessagingService() {
      */
     private fun searchNode(obj: JSONObject, depth: Int): Phonecall? {
         if (obj.optString("type") == "phonecall") {
-            return Phonecall(
-                obj.optString("title", "New Lead"),
-                obj.optString("body", "New lead purchased!"),
-                firstNonEmpty(obj.optString("lead", ""), obj.optString("leadData", "")) ?: "{}",
-            )
+            val leadJson = firstNonEmpty(obj.optString("lead", ""), obj.optString("leadData", "")) ?: "{}"
+            val rawTitle = obj.optString("title", "New Lead")
+            // The payload's title is whatever the browser extension sent — this app
+            // doesn't control it. Derive dummy-ness ourselves from the lead record
+            // (mirrors dummyLead.ts's isDummyLead) so "[TEST]" marking is reliable
+            // on this fully-killed-app path too, not just the JS-driven paths.
+            val title = if (!rawTitle.startsWith(TEST_PREFIX) && isDummyLead(leadJson)) {
+                "$TEST_PREFIX$rawTitle"
+            } else {
+                rawTitle
+            }
+            return Phonecall(title, obj.optString("body", "New lead purchased!"), leadJson)
         }
         if (depth >= MAX_DEPTH) return null
 
@@ -68,8 +75,23 @@ class LeadNotificationService : ExpoFirebaseMessagingService() {
 
     private fun firstNonEmpty(vararg values: String): String? = values.firstOrNull { it.isNotEmpty() }
 
+    /** Mirrors dummyLead.ts's isDummyLead/normalizeMobile — keep both in sync. */
+    private fun isDummyLead(leadJson: String): Boolean {
+        val mobile = try {
+            JSONObject(leadJson).optString("buyerMobile", "")
+        } catch (e: Exception) {
+            return false
+        }
+        if (mobile.isEmpty()) return false
+        val digits = mobile.filter { it.isDigit() }
+        val normalized = if (digits.length == 12 && digits.startsWith("91")) digits.substring(2) else digits
+        return normalized == DUMMY_BUYER_MOBILE
+    }
+
     companion object {
         private const val TAG = "LeadNotifSvc"
         private const val MAX_DEPTH = 4
+        private const val TEST_PREFIX = "[TEST] "
+        private const val DUMMY_BUYER_MOBILE = "9000000000"
     }
 }

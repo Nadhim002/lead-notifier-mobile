@@ -11,13 +11,14 @@ interface Props {
   maxPhones: number;
   onRename: (id: string, name: string) => void;
   onRemove: (id: string) => void;
+  deviceError?: string | null;
 }
 
 // Shown when the user is entitled but this phone has no seat (all phone slots
 // are taken). Self-service: remove one of the listed phones — with its last
 // active time — and this phone registers automatically.
-export function DeviceLimitScreen({ phones, maxPhones, onRename, onRemove }: Props) {
-  const { signOut } = useAuth();
+export function DeviceLimitScreen({ phones, maxPhones, onRename, onRemove, deviceError }: Props) {
+  const { signOut, error: signOutError } = useAuth();
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.icon}>📵</Text>
@@ -28,6 +29,7 @@ export function DeviceLimitScreen({ phones, maxPhones, onRename, onRemove }: Pro
       </Text>
 
       <PhoneDeviceList phones={phones} onRename={onRename} onRemove={onRemove} />
+      {deviceError ? <Text style={styles.error}>{deviceError}</Text> : null}
 
       <TouchableOpacity onPress={() => Linking.openURL(`mailto:${ADMIN_CONTACT_EMAIL}`)}>
         <Text style={styles.link}>Need more devices? Contact {ADMIN_CONTACT_EMAIL}</Text>
@@ -36,6 +38,7 @@ export function DeviceLimitScreen({ phones, maxPhones, onRename, onRemove }: Pro
       <TouchableOpacity style={styles.signOutBtn} onPress={signOut} activeOpacity={0.8}>
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
+      {signOutError ? <Text style={styles.error}>{signOutError}</Text> : null}
     </ScrollView>
   );
 }
@@ -48,4 +51,5 @@ const styles = StyleSheet.create({
   link: { fontSize: 13, color: '#2563eb', textAlign: 'center', marginTop: 8 },
   signOutBtn: { backgroundColor: '#ef4444', borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 20 },
   signOutText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  error: { marginTop: 8, color: '#dc2626', fontSize: 13, textAlign: 'center' },
 });

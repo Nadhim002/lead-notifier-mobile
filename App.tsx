@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, AppState } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, AppState } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import { AuthProvider, useAuth } from './hooks/AuthProvider';
 import { useEntitlement } from './hooks/useEntitlement';
 import { usePhoneDevices } from './hooks/usePhoneDevices';
 import { DevicesProvider } from './hooks/DevicesContext';
+import { useNotificationStyle } from './hooks/useNotificationStyle';
+import { NotificationStyleProvider } from './hooks/NotificationStyleContext';
 import { LockoutScreen } from './screens/LockoutScreen';
 import { DeviceLimitScreen } from './screens/DeviceLimitScreen';
 import { setupNotifications } from './notifications';
@@ -28,6 +31,7 @@ function AppShell() {
 
   const entitlement = useEntitlement(uid ? email : null);
   const devices = usePhoneDevices(uid ? email : null, fcmToken, entitlement);
+  const notificationStyleState = useNotificationStyle(uid ? email : null);
 
   useEffect(() => {
     AppLog.log('App mounted');
@@ -115,6 +119,21 @@ function AppShell() {
     return <LockoutScreen reason={entitlement.reason} />;
   }
 
+  // The roster read failed outright (permission denied, offline on first
+  // load, etc.) — without this check `loaded` never becomes true, the
+  // seat-limit check below never fires, and the user would silently proceed
+  // with no phone registered and no visible error.
+  if (devices.rosterError) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.errorText}>{devices.rosterError}</Text>
+        <TouchableOpacity style={styles.retryBtn} onPress={devices.retryRoster} activeOpacity={0.8}>
+          <Text style={styles.retryText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   // Entitled but this phone has no seat: self-service removal screen.
   if (devices.loaded && !devices.seatAvailable) {
     return (
@@ -123,41 +142,49 @@ function AppShell() {
         maxPhones={devices.maxPhones}
         onRename={devices.renamePhone}
         onRemove={devices.removePhone}
+        deviceError={devices.error}
       />
     );
   }
 
   return (
     <DevicesProvider value={devices}>
-      <NavigationContainer ref={navigationRef} onReady={() => setNavReady(true)}>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="Home">
-            {(props) => <HomeScreen {...props} email={email} />}
-          </Stack.Screen>
-          <Stack.Screen
-            name="IncomingLead"
-            component={IncomingLeadScreen}
-            options={{ presentation: 'fullScreenModal', animation: 'fade' }}
-          />
-          <Stack.Screen
-            name="Settings"
-            component={SettingsScreen}
-            options={{ headerShown: true, title: 'Settings', headerBackTitle: 'Back' }}
-          />
-        </Stack.Navigator>
-      </NavigationContainer>
+      <NotificationStyleProvider value={notificationStyleState}>
+        <NavigationContainer ref={navigationRef} onReady={() => setNavReady(true)}>
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="Home">
+              {(props) => <HomeScreen {...props} email={email} />}
+            </Stack.Screen>
+            <Stack.Screen
+              name="IncomingLead"
+              component={IncomingLeadScreen}
+              options={{ presentation: 'fullScreenModal', animation: 'fade' }}
+            />
+            <Stack.Screen
+              name="Settings"
+              component={SettingsScreen}
+              options={{ headerShown: true, title: 'Settings', headerBackTitle: 'Back' }}
+            />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </NotificationStyleProvider>
     </DevicesProvider>
   );
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppShell />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <AppShell />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  errorText: { fontSize: 14, color: '#b91c1c', marginBottom: 12, textAlign: 'center' },
+  retryBtn: { paddingVertical: 10, paddingHorizontal: 20, backgroundColor: '#0f172a', borderRadius: 10 },
+  retryText: { color: '#ffffff', fontWeight: '600' },
 });

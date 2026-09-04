@@ -6,12 +6,12 @@ import { sanitizeEmail } from '../email';
 import { fireLeadNotification, leadNotificationText } from '../notifications';
 import { PhonecallNotification } from '../modules/PhonecallNotification';
 import { navigateToIncomingLead } from '../navigation';
-import { useNotificationStyle } from './useNotificationStyle';
+import { useNotificationStyleContext } from './NotificationStyleContext';
 import { LeadsLog } from '../logger';
 import { LeadPayload } from '../types/lead';
 
 export function useLeadListener(email: string | null): void {
-  const [notificationStyle] = useNotificationStyle(email);
+  const [notificationStyle] = useNotificationStyleContext();
 
   useEffect(() => {
     if (!email) return;
@@ -35,6 +35,7 @@ export function useLeadListener(email: string | null): void {
         buyerName: data.buyerName ?? null,
         buyerMobile: data.buyerMobile ?? null,
         quantity: data.quantity ?? null,
+        price: data.price ?? null,
         city: data.city ?? null,
         state: data.state ?? null,
         timestamp: data.timestamp,

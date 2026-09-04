@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Switch, ScrollView, AppState } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useNotificationStyle, NotificationStyle } from '../hooks/useNotificationStyle';
+import { useNotificationStyleContext } from '../hooks/NotificationStyleContext';
 import { useAuth } from '../hooks/AuthProvider';
 import { useDevicesContext } from '../hooks/DevicesContext';
 import { PhoneDeviceList } from '../components/PhoneDeviceList';
@@ -10,9 +10,9 @@ import { RootStackParamList } from '../navigation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
-export function SettingsScreen({ navigation }: Props) {
-  const { email, signOut } = useAuth();
-  const [style, setStyle] = useNotificationStyle(email);
+export function SettingsScreen(_props: Props) {
+  const { email, signOut, error: signOutError } = useAuth();
+  const [style, setStyle] = useNotificationStyleContext();
   const devices = useDevicesContext();
 
   // The overlay permission is optional and never gates Phone Call style — only
@@ -39,11 +39,6 @@ export function SettingsScreen({ navigation }: Props) {
     // to open settings if missing. Overlay is surfaced separately below as a
     // skippable reliability improvement.
     PhonecallNotification.ensurePhonecallPermissions();
-  };
-
-  const handleSignOut = async () => {
-    await signOut();
-    navigation.popToTop();
   };
 
   return (
@@ -82,14 +77,16 @@ export function SettingsScreen({ navigation }: Props) {
         onRename={devices.renamePhone}
         onRemove={devices.removePhone}
       />
+      {devices.error ? <Text style={styles.error}>{devices.error}</Text> : null}
 
       <Text style={styles.section}>Account</Text>
       <View style={styles.accountRow}>
         <Text style={styles.accountEmail}>{email ?? '—'}</Text>
       </View>
-      <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut} activeOpacity={0.8}>
+      <TouchableOpacity style={styles.signOutBtn} onPress={signOut} activeOpacity={0.8}>
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
+      {signOutError ? <Text style={styles.error}>{signOutError}</Text> : null}
     </ScrollView>
   );
 }
@@ -223,5 +220,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '700',
+  },
+  error: {
+    marginTop: 8,
+    color: '#dc2626',
+    fontSize: 13,
+    textAlign: 'center',
   },
 });

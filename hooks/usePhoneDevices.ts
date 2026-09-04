@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ref, onValue, set, update, remove } from 'firebase/database';
 import { db } from '../firebase';
@@ -27,6 +27,14 @@ export function usePhoneDevices(
   const [phones, setPhones] = useState<Record<string, PhoneRecord>>({});
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [rosterError, setRosterError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  // Set when the user removes THIS device's own record from Settings. Without
+  // it, the roster update from that removal frees a seat and the registration
+  // effect below immediately re-registers this phone — the "removal" never
+  // sticks. Cleared only by relaunching the app (fresh hook instance).
+  const selfRemovedRef = useRef(false);
 
   const accountKey = email ? sanitizeEmail(email) : null;
 
@@ -36,12 +44,25 @@ export function usePhoneDevices(
 
   useEffect(() => {
     if (!accountKey) return;
-    const unsub = onValue(ref(db, `accounts/${accountKey}/phones`), (s) => {
-      setPhones((s.val() ?? {}) as Record<string, PhoneRecord>);
-      setLoaded(true);
-    });
+    setRosterError(null);
+    const unsub = onValue(
+      ref(db, `accounts/${accountKey}/phones`),
+      (s) => {
+        setPhones((s.val() ?? {}) as Record<string, PhoneRecord>);
+        setLoaded(true);
+      },
+      (e) => {
+        DeviceLog.error('roster read failed:', e);
+        setRosterError('Could not load your devices. Check your connection and try again.');
+      }
+    );
     return () => unsub();
-  }, [accountKey]);
+  }, [accountKey, retryTick]);
+
+  const retryRoster = useCallback(() => {
+    setLoaded(false);
+    setRetryTick((t) => t + 1);
+  }, []);
 
   const maxPhones = entitlement?.maxPhones ?? 0;
   const phoneCount = Object.keys(phones).length;
@@ -51,6 +72,7 @@ export function usePhoneDevices(
   // Register or heartbeat this phone once the roster is known and there's room.
   useEffect(() => {
     if (!accountKey || !deviceId || !loaded || !entitlement?.valid || !fcmToken) return;
+    if (selfRemovedRef.current) return;
     const myRef = deviceRef(accountKey, deviceId);
     if (thisRegistered) {
       // Re-assert the device's chosen notificationStyle on every heartbeat so it
@@ -60,9 +82,10 @@ export function usePhoneDevices(
       // 'headsup' default and the extension keeps sending banners.
       AsyncStorage.getItem('notificationStyle').then((storedStyle) => {
         const notificationStyle = storedStyle === 'phonecall' ? 'phonecall' : 'headsup';
-        update(myRef, { fcmToken, notificationStyle, lastSeen: Date.now() }).catch((e) =>
-          DeviceLog.error('heartbeat failed:', e)
-        );
+        update(myRef, { fcmToken, notificationStyle, lastSeen: Date.now() }).catch((e) => {
+          DeviceLog.error('heartbeat failed:', e);
+          setError('Could not update this device. Check your connection.');
+        });
       });
     } else if (phoneCount < maxPhones) {
       AsyncStorage.getItem('notificationStyle').then((storedStyle) => {
@@ -73,7 +96,10 @@ export function usePhoneDevices(
           notificationStyle,
           lastSeen: Date.now(),
         };
-        set(myRef, record).catch((e) => DeviceLog.error('register failed:', e));
+        set(myRef, record).catch((e) => {
+          DeviceLog.error('register failed:', e);
+          setError('Could not register this device. Check your connection.');
+        });
       });
     }
   }, [accountKey, deviceId, loaded, entitlement?.valid, fcmToken, thisRegistered, phoneCount, maxPhones]);
@@ -81,7 +107,11 @@ export function usePhoneDevices(
   const renamePhone = useCallback(
     (id: string, name: string) => {
       if (!accountKey) return Promise.resolve();
-      return update(deviceRef(accountKey, id), { name });
+      setError(null);
+      return update(deviceRef(accountKey, id), { name }).catch((e) => {
+        DeviceLog.error('rename failed:', e);
+        setError('Could not rename device. Try again.');
+      });
     },
     [accountKey]
   );
@@ -89,9 +119,16 @@ export function usePhoneDevices(
   const removePhone = useCallback(
     (id: string) => {
       if (!accountKey) return Promise.resolve();
-      return remove(deviceRef(accountKey, id));
+      const isSelf = id === deviceId;
+      if (isSelf) selfRemovedRef.current = true;
+      setError(null);
+      return remove(deviceRef(accountKey, id)).catch((e) => {
+        if (isSelf) selfRemovedRef.current = false;
+        DeviceLog.error('remove failed:', e);
+        setError('Could not remove device. Try again.');
+      });
     },
-    [accountKey]
+    [accountKey, deviceId]
   );
 
   const phoneViews: PhoneView[] = Object.entries(phones).map(([id, p]) => ({
@@ -111,5 +148,8 @@ export function usePhoneDevices(
     deviceId,
     renamePhone,
     removePhone,
+    error,
+    rosterError,
+    retryRoster,
   };
 }

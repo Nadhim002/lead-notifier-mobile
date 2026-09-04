@@ -91,11 +91,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    try {
-      await GoogleSignin.signOut();
-      await firebaseSignOut(auth);
-    } catch (e: any) {
-      setError(e.message ?? 'Sign-out failed');
+    // Run independently: a Google-side failure (e.g. already signed out,
+    // network hiccup) must not prevent the Firebase session from ending too.
+    const results = await Promise.allSettled([GoogleSignin.signOut(), firebaseSignOut(auth)]);
+    const failure = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (failure) {
+      AuthLog.error('sign-out failed:', failure.reason);
+      setError(failure.reason?.message ?? 'Sign-out failed');
+    } else {
+      setError(null);
     }
   };
 

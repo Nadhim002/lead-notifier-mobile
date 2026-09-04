@@ -18,7 +18,7 @@ const COPY: Record<EntitlementReason, { title: string; body: string }> = {
 };
 
 export function LockoutScreen({ reason }: { reason: EntitlementReason }) {
-  const { email, signOut } = useAuth();
+  const { email, signOut, error } = useAuth();
   const copy = COPY[reason] ?? COPY['no-account'];
 
   return (
@@ -37,6 +37,7 @@ export function LockoutScreen({ reason }: { reason: EntitlementReason }) {
       <TouchableOpacity style={styles.signOutBtn} onPress={signOut} activeOpacity={0.8}>
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
 }
@@ -57,4 +58,5 @@ const styles = StyleSheet.create({
   link: { fontSize: 13, color: '#2563eb', textAlign: 'center' },
   signOutBtn: { backgroundColor: '#ef4444', borderRadius: 12, padding: 14, alignItems: 'center', width: '100%' },
   signOutText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  error: { marginTop: 12, color: '#dc2626', fontSize: 13, textAlign: 'center' },
 });

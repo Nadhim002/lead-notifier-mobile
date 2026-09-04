@@ -48,17 +48,18 @@ async function getStableDeviceId(): Promise<string | null> {
   return null;
 }
 
-// Resolve the stable device id, caching it. Creates a fallback id when the
-// platform cannot supply one (web, or iOS returning null).
+// Resolve this device's id, caching it on first use. A previously-cached id
+// always wins — even if the platform id becomes available later than it was
+// on first install — so this phone keeps the same Firebase record and seat
+// instead of registering a second, orphaned one under a new id.
 export async function getOrCreateDeviceId(): Promise<string> {
+  const stored = await AsyncStorage.getItem(DEVICE_ID_KEY);
+  if (stored) return stored;
   const stable = await getStableDeviceId();
   if (stable) {
-    // Cache so it stays consistent even if a native call transiently fails later.
     await AsyncStorage.setItem(DEVICE_ID_KEY, stable);
     return stable;
   }
-  const stored = await AsyncStorage.getItem(DEVICE_ID_KEY);
-  if (stored) return stored;
   const id = randomUuid();
   await AsyncStorage.setItem(DEVICE_ID_KEY, id);
   return id;

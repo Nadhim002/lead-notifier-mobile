@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLeadListener } from '../hooks/useLeadListener';
 import { useLeadHistory } from '../hooks/useLeadHistory';
 import { LeadDetailModal } from '../components/LeadDetailModal';
@@ -24,8 +25,10 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 export function HomeScreen({ email, navigation }: Props & { email: string | null }) {
   useLeadListener(email);
 
-  const { groups, loading, loadingMore, error, hasMore, refresh, loadMore } = useLeadHistory(email);
+  const { groups, loading, loadingMore, error, loadMoreError, hasMore, refresh, loadMore } =
+    useLeadHistory(email);
   const [selectedLead, setSelectedLead] = useState<LeadPayload | null>(null);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     HomeLog.log('HomeScreen mounted, listening for leads. account:', email);
@@ -42,7 +45,7 @@ export function HomeScreen({ email, navigation }: Props & { email: string | null
 
   return (
     <View style={styles.container}>
-      <View style={styles.banner}>
+      <View style={[styles.banner, { paddingTop: insets.top + 20 }]}>
         <View style={styles.bannerText}>
           <Text style={styles.bannerTitle}>Listening for Leads</Text>
           <Text style={styles.bannerSubtitle}>
@@ -83,13 +86,22 @@ export function HomeScreen({ email, navigation }: Props & { email: string | null
           refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} />}
           ListFooterComponent={
             hasMore ? (
-              <TouchableOpacity style={styles.loadMoreBtn} onPress={loadMore} disabled={loadingMore}>
-                {loadingMore ? (
-                  <ActivityIndicator />
-                ) : (
-                  <Text style={styles.loadMoreText}>Load more</Text>
-                )}
-              </TouchableOpacity>
+              loadMoreError ? (
+                <View style={styles.loadMoreErrorRow}>
+                  <Text style={styles.errorText}>{loadMoreError}</Text>
+                  <TouchableOpacity style={styles.retryBtn} onPress={loadMore}>
+                    <Text style={styles.retryText}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity style={styles.loadMoreBtn} onPress={loadMore} disabled={loadingMore}>
+                  {loadingMore ? (
+                    <ActivityIndicator />
+                  ) : (
+                    <Text style={styles.loadMoreText}>Load more</Text>
+                  )}
+                </TouchableOpacity>
+              )
             ) : null
           }
         />
@@ -113,9 +125,11 @@ function LeadTile({ lead, onPress }: { lead: LeadPayload; onPress: () => void })
         {dummy ? <DummyLeadBadge /> : null}
       </View>
       <View style={styles.tileRow}>
-        <Text style={styles.tileMeta}>{lead.city ?? '—'}</Text>
-        <Text style={styles.tileMeta}>{lead.quantity ? `Qty: ${lead.quantity}` : '—'}</Text>
-        <Text style={styles.tileMeta}>{lead.price != null ? `₹${lead.price.toLocaleString()}` : '—'}</Text>
+        {lead.city ? <Text style={styles.tileMeta}>{lead.city}</Text> : null}
+        {lead.quantity ? <Text style={styles.tileMeta}>{`Qty: ${lead.quantity}`}</Text> : null}
+        {lead.price != null ? (
+          <Text style={styles.tileMeta}>{`₹${lead.price.toLocaleString()}`}</Text>
+        ) : null}
       </View>
     </TouchableOpacity>
   );
@@ -172,8 +186,9 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   tileTitle: { flex: 1, fontSize: 15, fontWeight: '600', color: '#0f172a' },
-  tileRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  tileRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   tileMeta: { fontSize: 13, color: '#475569' },
   loadMoreBtn: { paddingVertical: 14, alignItems: 'center' },
   loadMoreText: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
+  loadMoreErrorRow: { paddingVertical: 14, alignItems: 'center', gap: 8 },
 });
